@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: parlay-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -e . && alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      # Neon connection string, rewritten to the asyncpg driver:
+      #   postgresql+asyncpg://user:pass@host/db
+      # Strip any ?sslmode=require - asyncpg rejects it as an unknown kwarg.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: INTERNAL_TICK_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # The Vercel URL. Frontend and API are on different hosts, so the session cookie is
+      # cross-site and needs Secure + SameSite=None to be sent at all.
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

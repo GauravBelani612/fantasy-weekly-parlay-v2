@@ -1,0 +1,32 @@
+name: Parlay tick
+
+# Drives notifications only. Round open/lock state is derived from timestamps on every
+# read, so a missed run costs an email, never correctness.
+#
+# Every 30 minutes rather than every 15: GitHub bills a minimum of one minute per job, so
+# 30-minute spacing is ~1,440 min/month and stays inside the 2,000 free minutes a private
+# repo gets. Public repos have unlimited minutes and can safely go to */15.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API
+        run: |
+          code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
+            --max-time 120 \
+            --retry 3 --retry-delay 20 --retry-connrefused \
+            -X POST "${{ secrets.API_BASE_URL }}/internal/tick" \
+            -H "X-Tick-Secret: ${{ secrets.INTERNAL_TICK_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/body.json
+          echo
+          # Render's free tier sleeps; the retries above cover the cold start.
+          if [ "$code" != "200" ]; then
+            echo "::error::tick failed with HTTP $code"
+            exit 1
+          fi
