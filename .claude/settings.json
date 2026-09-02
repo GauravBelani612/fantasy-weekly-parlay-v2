@@ -42,7 +42,23 @@
       "Bash(./.venv/Scripts/python.exe -m ruff check --fix scripts/seed_round.py)",
       "Bash(./.venv/Scripts/python.exe -m ruff check scripts/)",
       "Bash(./.venv/Scripts/python.exe scripts/seed_round.py --sleeper-league-id 1242530523637624832 --week 5 --demo-legs)",
-      "Bash(./.venv/Scripts/python.exe scripts/seed_round.py --clear)"
+      "Bash(./.venv/Scripts/python.exe scripts/seed_round.py --clear)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5173,5174,8000 } | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; [PSCustomObject]@{ Port=$_.LocalPort; PID=$_.OwningProcess; Name=$p.ProcessName } } | Sort-Object Port | Format-Table -AutoSize; if \\(-not \\(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5173,8000 }\\)\\) { \"nothing listening on 5173/8000\" })",
+      "Bash(./.venv/Scripts/python.exe scripts/seed_round.py --sleeper-league-id 1242530523637624832 --week 5 --demo-legs --lock-in 2880)",
+      "Bash(curl -s -m 10 -o /dev/null -w \"localhost:5173 -> %{http_code}\\\\n\" http://localhost:5173/)",
+      "PowerShell($ports = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 5173,5174,8000 }; if \\($ports\\) { $ports | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; [PSCustomObject]@{ Port=$_.LocalPort; PID=$_.OwningProcess; Name=$p.ProcessName } } | Sort-Object Port | Format-Table -AutoSize } else { \"NOTHING listening on 5173 / 5174 / 8000 - both servers are down\" })",
+      "Bash(curl -s -i -m 10 -X OPTIONS http://localhost:8000/leagues -H 'Origin: http://localhost:5173' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: content-type')",
+      "Bash(curl -s -i -m 10 http://localhost:8000/health -H \"Origin: http://localhost:5173\")",
+      "Bash(export DATABASE_URL=\"sqlite+aiosqlite:///./_migcheck.db\")",
+      "Bash(rm -f _migcheck.db)",
+      "Bash(./.venv/Scripts/python.exe -m alembic upgrade head)",
+      "Bash(./.venv/Scripts/python.exe -m alembic check)",
+      "Bash(cd \"c:/Users/gmbel/OneDrive/Desktop/VSCode/fantasy-weekly-parlay-v2/backend\" && rm -f _migcheck.db && echo \"cleaned\")",
+      "Bash(git check-ignore *)",
+      "Bash(gh repo *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\gmbel\\OneDrive\\Desktop\\VSCode\\fantasy-weekly-parlay-v2\\backend"
     ]
   }
 }

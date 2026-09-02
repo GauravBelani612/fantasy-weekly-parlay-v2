@@ -102,6 +102,26 @@ fills in most of their legs — two are left blank so the "still waiting on" lis
 Your own roster is never pre-filled. Placeholder accounts all use the `@demo.invalid`
 domain, which is how `--clear` finds them; they can never collide with a real sign-in.
 
+## Troubleshooting
+
+**"Failed to fetch" when you open a league.** The API isn't running. The page itself keeps
+working for a while because React Query serves cached data, so the league *list* looks fine
+and only the click-through fails — which reads like a frontend bug but never is. Check the
+API first:
+
+```bash
+curl http://localhost:8000/health          # expect {"status":"ok"}
+```
+
+**`origin_mismatch` on the Google button.** The browser is on an origin that isn't
+registered. Almost always the port: if 5173 was busy, Vite silently starts on 5174, and
+Google treats that as a different app. Check Vite's startup banner for the real port, and
+kill stray dev servers rather than registering more ports.
+
+**Sign-in works but data never loads.** On Windows `localhost` can resolve to IPv6 `::1`
+while uvicorn listens on IPv4 only. Set `VITE_API_BASE_URL=http://127.0.0.1:8000` to
+sidestep it.
+
 ## Tests
 
 ```bash
