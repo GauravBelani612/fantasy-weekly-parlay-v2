@@ -16,6 +16,10 @@ venv/
 .env.local
 .env.*.local
 !.env.example
+keys.txt
+secrets.txt
+*.pem
+*.key
 
 # Node
 node_modules/

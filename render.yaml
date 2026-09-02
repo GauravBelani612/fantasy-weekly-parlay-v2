@@ -3,6 +3,10 @@ services:
     name: parlay-api
     runtime: python
     plan: free
+    # Must match the Neon project's region (us-east-2). Render defaults to Oregon, which
+    # would put every query on a cross-country round trip. A blueprint service cannot
+    # change region after creation -- only be destroyed and recreated.
+    region: ohio
     rootDir: backend
     buildCommand: pip install -e . && alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -21,16 +25,22 @@ services:
         generateValue: true
       - key: GOOGLE_CLIENT_ID
         sync: false
-      # The Vercel URL. Frontend and API are on different hosts, so the session cookie is
-      # cross-site and needs Secure + SameSite=None to be sent at all.
+      # Both of these are the frontend's URL, e.g. https://app.yourdomain.com.
       - key: FRONTEND_ORIGIN
         sync: false
       - key: APP_URL
         sync: false
       - key: COOKIE_SECURE
         value: "true"
+      # Lax is correct only while the web app and this API are subdomains of the SAME
+      # registrable domain (app.example.com + api.example.com) -- the cookie is then
+      # first-party, which is what keeps Safari from dropping it.
+      #
+      # If you ever move them back to different domains (*.vercel.app + *.onrender.com),
+      # this MUST become `none` or no browser will send the cookie at all. Do not test
+      # sign-in until the custom domains actually resolve.
       - key: COOKIE_SAMESITE
-        value: none
+        value: lax
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
