@@ -15,8 +15,11 @@ services:
       - key: PYTHON_VERSION
         value: "3.13.5"
       # Neon connection string, rewritten to the asyncpg driver:
-      #   postgresql+asyncpg://user:pass@host/db
-      # Strip any ?sslmode=require - asyncpg rejects it as an unknown kwarg.
+      #   postgresql+asyncpg://user:pass@host/db?ssl=require
+      # Replace ?sslmode=require with ?ssl=require -- asyncpg rejects `sslmode` as an
+      # unknown kwarg, but with no ssl argument at all it falls back to plaintext and
+      # Neon refuses the connection. Drop channel_binding. Use the direct host, not
+      # the -pooler one: the app runs its own pool (see app/db.py).
       - key: DATABASE_URL
         sync: false
       - key: SESSION_SECRET

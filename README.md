@@ -158,7 +158,11 @@ can submit a leg. If the payer hasn't signed up, the round still works and says 
 ## Deploying (free tier)
 
 1. **Neon** — create a Postgres project. Use the connection string as
-   `postgresql+asyncpg://...` and drop any `?sslmode=require` (asyncpg rejects it).
+   `postgresql+asyncpg://...` and replace `?sslmode=require` with `?ssl=require`.
+   Both halves matter: asyncpg rejects `sslmode` outright as an unknown kwarg, but with
+   *no* ssl argument at all it negotiates `prefer`, falls back to plaintext, and Neon
+   closes the connection with "connection is insecure". Only `ssl` is translated by the
+   SQLAlchemy asyncpg dialect. Drop `channel_binding` entirely.
 2. **Render** — `render.yaml` is a blueprint. Set `DATABASE_URL`, `GOOGLE_CLIENT_ID`,
    `FRONTEND_ORIGIN`, and `APP_URL`. Migrations run in the build command.
 3. **Vercel** — deploy `frontend/`. Set `VITE_API_BASE_URL` to the Render URL and
