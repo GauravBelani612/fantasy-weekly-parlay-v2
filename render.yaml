@@ -3,10 +3,11 @@ services:
     name: parlay-api
     runtime: python
     plan: free
-    # Must match the Neon project's region (us-east-2). Render defaults to Oregon, which
-    # would put every query on a cross-country round trip. A blueprint service cannot
-    # change region after creation -- only be destroyed and recreated.
-    region: ohio
+    # Keep this in the same region as the Neon project (us-west-2), or every query pays a
+    # cross-country round trip. Stated explicitly rather than relying on the default: a
+    # blueprint service cannot change region after creation, only be destroyed and
+    # recreated, so an implicit default here is a mistake that costs a rebuild.
+    region: oregon
     rootDir: backend
     buildCommand: pip install -e . && alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
