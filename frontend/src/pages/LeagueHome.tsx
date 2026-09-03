@@ -38,7 +38,7 @@ function LoserCard({ round, league }: { round: Round; league: LeagueDetail }) {
             <select
               value={choice}
               onChange={(event) => setChoice(event.target.value)}
-              className="rounded-lg border border-[#2d3d57] bg-[#0e141f] px-3 py-2 text-sm text-slate-100"
+              className="rounded-lg border border-edge-strong bg-input px-3 py-2 text-sm text-slate-100"
             >
               <option value="">Choose who pays...</option>
               {tied.map((m) => (
@@ -155,7 +155,7 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
           rows={2}
           maxLength={500}
           placeholder="Your bet..."
-          className="w-full resize-none rounded-lg border border-[#2d3d57] bg-[#0e141f] px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="w-full resize-none rounded-lg border border-edge-strong bg-input px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button type="submit" disabled={submit.isPending || !dirty || text.trim().length < 2}>
@@ -203,7 +203,7 @@ function LegBoard({ round }: { round: Round }) {
               className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
                 leg.is_you
                   ? "border-emerald-500/40 bg-emerald-500/5"
-                  : "border-[#223047] bg-[#0e141f]"
+                  : "border-edge bg-input"
               }`}
             >
               <span className="mt-0.5 w-4 shrink-0 text-right text-xs text-slate-600">
@@ -223,7 +223,7 @@ function LegBoard({ round }: { round: Round }) {
       )}
 
       {round.awaiting.length > 0 && (
-        <div className="mt-4 border-t border-[#223047] pt-3">
+        <div className="mt-4 border-t border-edge pt-3">
           <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
             Still waiting on
           </p>
@@ -231,7 +231,7 @@ function LegBoard({ round }: { round: Round }) {
             {round.awaiting.map((member) => (
               <span
                 key={member.id}
-                className="flex items-center gap-1.5 rounded-full border border-[#2d3d57] px-2.5 py-1 text-xs text-slate-300"
+                className="flex items-center gap-1.5 rounded-full border border-edge-strong px-2.5 py-1 text-xs text-slate-300"
               >
                 <Avatar member={member} size={16} />
                 {member.display_name}
@@ -268,14 +268,14 @@ export function LeagueHome() {
         <div className="flex gap-2">
           <Link
             to={`/leagues/${leagueId}/history`}
-            className="rounded-lg border border-[#2d3d57] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-[#1b2534]"
+            className="rounded-lg border border-edge-strong px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-panel-hover"
           >
             History
           </Link>
           {league.data.your_role === "commissioner" && (
             <Link
               to={`/leagues/${leagueId}/settings`}
-              className="rounded-lg border border-[#2d3d57] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-[#1b2534]"
+              className="rounded-lg border border-edge-strong px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-panel-hover"
             >
               Settings
             </Link>

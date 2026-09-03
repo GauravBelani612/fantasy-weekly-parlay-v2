@@ -34,7 +34,7 @@ function LinkSleeperCard() {
           onChange={(event) => setUsername(event.target.value)}
           placeholder="sleeper username"
           autoComplete="off"
-          className="flex-1 rounded-lg border border-[#2d3d57] bg-[#0e141f] px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
+          className="flex-1 rounded-lg border border-edge-strong bg-input px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500"
         />
         <Button type="submit" disabled={claim.isPending || !username.trim()}>
           {claim.isPending ? "Checking..." : "Link"}
@@ -66,7 +66,7 @@ function ImportLeagues({ season }: { season?: string }) {
       {available.map((league) => (
         <li
           key={league.sleeper_league_id}
-          className="flex items-center gap-3 rounded-lg border border-[#223047] bg-[#0e141f] px-3 py-2"
+          className="flex items-center gap-3 rounded-lg border border-edge bg-input px-3 py-2"
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>
@@ -115,7 +115,7 @@ export function LeaguesPage() {
               <li key={league.id}>
                 <Link
                   to={`/leagues/${league.id}`}
-                  className="flex items-center gap-3 rounded-lg border border-[#223047] bg-[#0e141f] px-3 py-3 transition hover:border-emerald-500/50"
+                  className="flex items-center gap-3 rounded-lg border border-edge bg-input px-3 py-3 transition hover:border-emerald-500/50"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>

@@ -9,7 +9,7 @@ const OUTCOME_STYLES: Record<string, string> = {
   won: "text-emerald-300 border-emerald-500/40 bg-emerald-500/10",
   lost: "text-red-300 border-red-500/40 bg-red-500/10",
   void: "text-slate-300 border-slate-500/40 bg-slate-500/10",
-  pending: "text-slate-400 border-[#2d3d57]",
+  pending: "text-slate-400 border-edge-strong",
 };
 
 function money(cents: number | null): string | null {
@@ -29,7 +29,7 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
 
   return (
     <form
-      className="mt-3 grid grid-cols-2 gap-2 border-t border-[#223047] pt-3 sm:grid-cols-4"
+      className="mt-3 grid grid-cols-2 gap-2 border-t border-edge pt-3 sm:grid-cols-4"
       onSubmit={(event) => {
         event.preventDefault();
         record.mutate({
@@ -45,7 +45,7 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
         <select
           value={outcome}
           onChange={(event) => setOutcome(event.target.value as Round["outcome"])}
-          className="mt-1 w-full rounded-lg border border-[#2d3d57] bg-[#0e141f] px-2 py-1.5 text-sm text-slate-100"
+          className="mt-1 w-full rounded-lg border border-edge-strong bg-input px-2 py-1.5 text-sm text-slate-100"
         >
           <option value="pending">Pending</option>
           <option value="won">Won</option>
@@ -59,7 +59,7 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
           value={odds}
           onChange={(event) => setOdds(event.target.value)}
           placeholder="+1250"
-          className="mt-1 w-full rounded-lg border border-[#2d3d57] bg-[#0e141f] px-2 py-1.5 text-sm text-slate-100"
+          className="mt-1 w-full rounded-lg border border-edge-strong bg-input px-2 py-1.5 text-sm text-slate-100"
         />
       </label>
       <label className="text-xs text-slate-500">
@@ -69,7 +69,7 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
           onChange={(event) => setStake(event.target.value)}
           inputMode="decimal"
           placeholder="20"
-          className="mt-1 w-full rounded-lg border border-[#2d3d57] bg-[#0e141f] px-2 py-1.5 text-sm text-slate-100"
+          className="mt-1 w-full rounded-lg border border-edge-strong bg-input px-2 py-1.5 text-sm text-slate-100"
         />
       </label>
       <label className="text-xs text-slate-500">
@@ -79,7 +79,7 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
           onChange={(event) => setPayout(event.target.value)}
           inputMode="decimal"
           placeholder="270"
-          className="mt-1 w-full rounded-lg border border-[#2d3d57] bg-[#0e141f] px-2 py-1.5 text-sm text-slate-100"
+          className="mt-1 w-full rounded-lg border border-edge-strong bg-input px-2 py-1.5 text-sm text-slate-100"
         />
       </label>
       <div className="col-span-2 sm:col-span-4">

@@ -13,10 +13,13 @@ function Header() {
   const logout = useLogout();
 
   return (
-    <header className="border-b border-[#223047]">
+    <header className="border-b border-edge">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
-        <Link to="/" className="text-sm font-bold tracking-tight text-white">
-          Weekly Parlay
+        {/* Echoes the logo's own wordmark treatment. The full mark is a square
+            containing this same wordmark, which would be illegible at header size. */}
+        <Link to="/" className="text-base font-extrabold tracking-tight">
+          <span className="text-white">Weekly</span>
+          <span className="text-emerald-400">Lay</span>
         </Link>
         {me.data && (
           <div className="flex items-center gap-3">

@@ -1,9 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface: #0b0f17;
-  --color-panel: #131a26;
-  --color-edge: #223047;
+  /* ---- Brand ----------------------------------------------------------
+     Sampled directly from the logo artwork rather than eyeballed: the mark's
+     gradient runs #00AB5C -> #03E786, averaging #01C46E across 110k pixels. */
+  --color-brand-deep: #00ab5c;
+  --color-brand: #01c46e;
+  --color-brand-bright: #03e786;
+
+  /* ---- Surfaces -------------------------------------------------------
+     Deliberately not pure black. The logo's own background is #000000, but a
+     page at #000 with near-white text causes halation -- text appears to bleed
+     and is tiring to read for long. A hair above black keeps the logo looking
+     seamless while staying comfortable. */
+  --color-surface: #090b0e;
+  --color-panel: #12161b;
+  --color-panel-hover: #1a1f26;
+  --color-input: #0c1014;
+  --color-edge: #232a33;
+  --color-edge-strong: #2f3843;
+  --color-avatar: #222a33;
+
+  /* ---- Emerald remapped to the brand greens --------------------------
+     Overriding the tokens rather than rewriting ~130 class names means every
+     existing bg-emerald-500 / text-emerald-400 / border-emerald-500 picks up
+     the logo's palette automatically. */
+  --color-emerald-300: #3df29b;
+  --color-emerald-400: #03e786;
+  --color-emerald-500: #01c46e;
+  --color-emerald-600: #00ab5c;
+
+  /* ---- Slate, lifted for contrast on a near-black page ----------------
+     Tailwind's stock slate is tuned for lighter backgrounds. On #090b0e the
+     stock slate-600 (#475569) lands around 2.4:1 -- below AA for body text and
+     genuinely hard to read. Each step here clears its intended use. */
+  --color-slate-100: #f2f5f7;
+  --color-slate-200: #dce2e8;
+  --color-slate-300: #bfc8d1;
+  --color-slate-400: #98a3ae;
+  --color-slate-500: #7c8792;
+  --color-slate-600: #626d78;
+  --color-slate-700: #39424c;
+  /* Sits on top of a brand-green button, so it is a green-black, not a grey. */
+  --color-slate-950: #04140d;
 }
 
 html,
@@ -15,9 +54,17 @@ body,
 body {
   margin: 0;
   background-color: var(--color-surface);
-  color: #e6edf7;
+  color: #e8edf2;
   font-family:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The logo PNG has no alpha channel -- its black background is baked in, so it
+   would otherwise sit on the page as a visible black square. `screen` maps pure
+   black to the backdrop exactly (1-(1-0)(1-b) = b), erasing it, while white and
+   the brand greens come through untouched against a near-black page. */
+.logo-blend {
+  mix-blend-mode: screen;
 }

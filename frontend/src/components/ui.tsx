@@ -11,7 +11,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-[#223047] bg-[#131a26] p-5 shadow-lg shadow-black/20 ${className}`}
+      className={`rounded-xl border border-edge bg-panel p-5 shadow-lg shadow-black/20 ${className}`}
     >
       {children}
     </section>
@@ -27,7 +27,7 @@ export function Button({
 }) {
   const styles = {
     primary: "bg-emerald-500 text-slate-950 hover:bg-emerald-400 disabled:bg-slate-700",
-    ghost: "border border-[#2d3d57] text-slate-200 hover:bg-[#1b2534] disabled:opacity-40",
+    ghost: "border border-edge-strong text-slate-200 hover:bg-panel-hover disabled:opacity-40",
     danger: "border border-red-500/40 text-red-300 hover:bg-red-500/10 disabled:opacity-40",
   }[variant];
 
@@ -49,14 +49,14 @@ export function Avatar({ member, size = 32 }: { member: Pick<Member, "display_na
         alt=""
         width={size}
         height={size}
-        className="shrink-0 rounded-full bg-[#1b2534] object-cover"
+        className="shrink-0 rounded-full bg-panel-hover object-cover"
         style={{ width: size, height: size }}
       />
     );
   }
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-[#243146] text-xs font-bold text-slate-300"
+      className="flex shrink-0 items-center justify-center rounded-full bg-avatar text-xs font-bold text-slate-300"
       style={{ width: size, height: size }}
     >
       {member.display_name.slice(0, 2).toUpperCase()}
