@@ -1,5 +1,6 @@
 import { GoogleSignIn } from "../components/GoogleSignIn";
 import { ErrorNote, Panel } from "../components/ui";
+import { LegalLinks } from "./Legal";
 import { useGoogleLogin } from "../api/hooks";
 
 export function Login() {
@@ -9,7 +10,7 @@ export function Login() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
       <h1 className="mb-4">
         <img
-          src="/weeklylay-logo.png"
+          src="/weeklylay-logo-384.png"
           alt="WeeklyLay"
           width={176}
           height={176}
@@ -27,6 +28,8 @@ export function Login() {
         {login.isPending && <p className="mt-3 text-sm text-slate-400">Signing you in...</p>}
         <ErrorNote error={login.error} />
       </Panel>
+
+      <LegalLinks className="mt-8" />
     </div>
   );
 }

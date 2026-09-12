@@ -50,8 +50,13 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => api.post<void>("/auth/logout"),
     onSuccess: () => {
+      // Drop every cached query so no signed-in league data outlives the session...
       qc.clear();
-      qc.invalidateQueries();
+      // ...then say outright that we are signed out. Clearing alone only empties the
+      // cache; it does not hand the mounted useMe() observer a result, so the app went
+      // on rendering the signed-in tree until a reload forced a fresh /me. Seeding null
+      // flips it to the login screen on the next render, with no round trip.
+      qc.setQueryData<Me | null>(keys.me, null);
     },
   });
 }
