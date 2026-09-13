@@ -6,6 +6,7 @@ name: Parlay tick
 # Every 30 minutes rather than every 15: GitHub bills a minimum of one minute per job, so
 # 30-minute spacing is ~1,440 min/month and stays inside the 2,000 free minutes a private
 # repo gets. Public repos have unlimited minutes and can safely go to */15.
+
 on:
   schedule:
     - cron: "*/30 * * * *"
@@ -15,18 +16,100 @@ jobs:
   tick:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping the API
+      # Every way this job fails looks identical in the run list, so name the cause here
+      # rather than leaving a bare non-200 to be puzzled over. Values are never printed --
+      # only lengths, which is enough to tell "unset" from "set but wrong".
+      - name: Check the secrets are configured
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          TICK_SECRET: ${{ secrets.INTERNAL_TICK_SECRET }}
         run: |
+          fail=0
+
+          if [ -z "$API_BASE_URL" ]; then
+            echo "::error::API_BASE_URL is not set. Add it under Settings > Secrets and variables > Actions, as https://api.weeklylay.com"
+            fail=1
+          else
+            echo "API_BASE_URL set (${#API_BASE_URL} chars)"
+            case "$API_BASE_URL" in
+              https://*) ;;
+              *) echo "::error::API_BASE_URL does not start with https:// -- it should be the full origin, not a bare hostname."; fail=1 ;;
+            esac
+            case "$API_BASE_URL" in
+              */) echo "::warning::API_BASE_URL ends in a slash. Harmless here (it is stripped below) but worth tidying." ;;
+            esac
+          fi
+
+          if [ -z "$TICK_SECRET" ]; then
+            echo "::error::INTERNAL_TICK_SECRET is not set. Copy it from the Render service's Environment tab."
+            fail=1
+          else
+            echo "INTERNAL_TICK_SECRET set (${#TICK_SECRET} chars)"
+            # A trailing newline captured while copying is invisible in the GitHub UI and
+            # makes the header not match. This is the same mistake that broke DATABASE_URL.
+            if [ "$TICK_SECRET" != "$(printf '%s' "$TICK_SECRET" | tr -d '[:space:]')" ]; then
+              echo "::error::INTERNAL_TICK_SECRET contains whitespace -- almost certainly a newline captured when pasting. Re-copy it with no trailing blank line."
+              fail=1
+            fi
+          fi
+
+          exit $fail
+
+      - name: Wake the API
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          # Render's free tier sleeps after ~15 minutes idle and can take a minute to come
+          # back. Absorbing that on /health keeps a cold start from being misread as a
+          # broken tick. A failure here is not fatal -- the real call reports for itself.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 180 --retry 5 --retry-delay 15 --retry-connrefused \
+            "${API_BASE_URL%/}/health" || echo 000)
+          echo "health check: HTTP $code"
+
+      - name: Ping the API
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          TICK_SECRET: ${{ secrets.INTERNAL_TICK_SECRET }}
+        run: |
+          set +e
           code=$(curl -sS -o /tmp/body.json -w '%{http_code}' \
-            --max-time 120 \
-            --retry 3 --retry-delay 20 --retry-connrefused \
-            -X POST "${{ secrets.API_BASE_URL }}/internal/tick" \
-            -H "X-Tick-Secret: ${{ secrets.INTERNAL_TICK_SECRET }}")
-          echo "HTTP $code"
-          cat /tmp/body.json
+            --max-time 120 --retry 2 --retry-delay 10 --retry-connrefused \
+            -X POST "${API_BASE_URL%/}/internal/tick" \
+            -H "X-Tick-Secret: $TICK_SECRET")
+          curl_rc=$?
+          set -e
+
+          echo "curl exit=$curl_rc  HTTP=$code"
+          echo "--- response body ---"
+          cat /tmp/body.json 2>/dev/null || true
           echo
-          # Render's free tier sleeps; the retries above cover the cold start.
-          if [ "$code" != "200" ]; then
-            echo "::error::tick failed with HTTP $code"
+
+          # Distinguish "never reached the server" from "server said no" -- they have
+          # completely different fixes and the old workflow conflated them.
+          if [ "$curl_rc" -ne 0 ]; then
+            echo "::error::Could not reach ${API_BASE_URL%/}/internal/tick (curl exit $curl_rc). API_BASE_URL is wrong, or the service is down."
             exit 1
           fi
+
+          case "$code" in
+            200)
+              echo "tick ok"
+              ;;
+            401)
+              echo "::error::401 Unauthorized -- INTERNAL_TICK_SECRET here does not match INTERNAL_TICK_SECRET in the Render service. Re-copy it from Render's Environment tab."
+              exit 1
+              ;;
+            404)
+              echo "::error::404 -- API_BASE_URL reaches a server, but not this API. Expected https://api.weeklylay.com"
+              exit 1
+              ;;
+            503)
+              echo "::error::503 -- the API reports its tick secret is not configured on the Render side."
+              exit 1
+              ;;
+            *)
+              echo "::error::Unexpected HTTP $code from the tick endpoint."
+              exit 1
+              ;;
+          esac
