@@ -4,11 +4,20 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations import sleeper
-from app.models import League, LeagueMember, SleeperLink, User
+from app.models import (
+    League,
+    LeagueMember,
+    Leg,
+    NotificationLog,
+    ParlayRound,
+    SleeperLink,
+    User,
+    WeekScore,
+)
 
 log = logging.getLogger(__name__)
 
@@ -143,3 +152,25 @@ async def get_membership(
             LeagueMember.league_id == league_id, LeagueMember.user_id == user.id
         )
     )
+
+
+async def delete_league(session: AsyncSession, league: League) -> None:
+    """Delete a league and everything hanging off it.
+
+    Children are removed explicitly rather than leaning on ON DELETE CASCADE. The foreign
+    keys do declare it, and Postgres honours it -- but SQLite ignores foreign keys entirely
+    unless PRAGMA foreign_keys is turned on, which this app never does, and both local dev
+    and the test suite run on SQLite. Deleting by hand behaves the same on both.
+
+    Order matters: rounds go before members, because parlay_rounds.loser_member_id points
+    at league_members.
+    """
+    round_ids = select(ParlayRound.id).where(ParlayRound.league_id == league.id)
+
+    await session.execute(delete(Leg).where(Leg.round_id.in_(round_ids)))
+    await session.execute(delete(NotificationLog).where(NotificationLog.round_id.in_(round_ids)))
+    await session.execute(delete(ParlayRound).where(ParlayRound.league_id == league.id))
+    await session.execute(delete(WeekScore).where(WeekScore.league_id == league.id))
+    await session.execute(delete(LeagueMember).where(LeagueMember.league_id == league.id))
+    await session.execute(delete(League).where(League.id == league.id))
+    await session.commit()

@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 
 import {
   useClaimSleeper,
+  useDeleteLeague,
   useImportLeague,
   useImportableLeagues,
   useMe,
   useMyLeagues,
 } from "../api/hooks";
+import type { League } from "../api/types";
 import { Button, ErrorNote, Panel, Spinner } from "../components/ui";
 
 function LinkSleeperCard() {
@@ -92,6 +94,62 @@ function ImportLeagues({ season }: { season?: string }) {
   );
 }
 
+function LeagueRow({ league }: { league: League }) {
+  const [confirming, setConfirming] = useState(false);
+  const remove = useDeleteLeague();
+  const isCommissioner = league.your_role === "commissioner";
+
+  return (
+    <li className="rounded-lg border border-edge bg-input transition hover:border-emerald-500/50">
+      <div className="flex items-center gap-3 px-3 py-3">
+        {/* The remove button is a sibling of the link, never inside it -- a button nested
+            in an anchor is invalid markup and swallows the click on some browsers. */}
+        <Link to={`/leagues/${league.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>
+            <p className="text-xs text-slate-500">
+              {league.season} &middot; {league.total_rosters} teams
+              {isCommissioner && " · commissioner"}
+            </p>
+          </div>
+          <span className="text-slate-500">&rsaquo;</span>
+        </Link>
+        {isCommissioner && !confirming && (
+          <button
+            onClick={() => setConfirming(true)}
+            className="shrink-0 rounded-lg border border-edge-strong px-2.5 py-1 text-xs font-semibold text-slate-400 transition hover:border-red-500/40 hover:text-red-300"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {confirming && (
+        <div className="border-t border-edge px-3 py-3">
+          <p className="text-xs text-slate-400">
+            Remove <span className="font-semibold text-slate-200">{league.name}</span> for
+            everyone in it? Submitted legs and past parlays go with it. Your Sleeper league is
+            untouched, so you can add it again at any time.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button
+              variant="danger"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate(league.id)}
+            >
+              {remove.isPending ? "Removing..." : "Yes, remove it"}
+            </Button>
+            <Button variant="ghost" disabled={remove.isPending} onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </div>
+          <ErrorNote error={remove.error} />
+        </div>
+      )}
+    </li>
+  );
+}
+
 export function LeaguesPage() {
   const me = useMe();
   const leagues = useMyLeagues();
@@ -112,21 +170,7 @@ export function LeaguesPage() {
         ) : (
           <ul className="space-y-2">
             {leagues.data!.map((league) => (
-              <li key={league.id}>
-                <Link
-                  to={`/leagues/${league.id}`}
-                  className="flex items-center gap-3 rounded-lg border border-edge bg-input px-3 py-3 transition hover:border-emerald-500/50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {league.season} &middot; {league.total_rosters} teams
-                      {league.your_role === "commissioner" && " &middot; commissioner"}
-                    </p>
-                  </div>
-                  <span className="text-slate-500">&rsaquo;</span>
-                </Link>
-              </li>
+              <LeagueRow key={league.id} league={league} />
             ))}
           </ul>
         )}

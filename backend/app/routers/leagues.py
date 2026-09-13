@@ -66,6 +66,18 @@ async def sync_league(ctx: LeagueCtx, user: CurrentUser, session: DbSession):
     return league_detail_out(ctx.league, members, user)
 
 
+@router.delete("/{league_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_league(ctx: LeagueCtx, session: DbSession) -> None:
+    """Remove a league entirely -- commissioner only.
+
+    This is league-wide, not "leave the league": it takes the board away from everyone in
+    it, which is what you want for a league imported by mistake. Sleeper is unaffected, so
+    a league deleted here can simply be imported again.
+    """
+    ctx.require_commissioner()
+    await leagues_service.delete_league(session, ctx.league)
+
+
 @router.patch("/{league_id}/settings", response_model=LeagueOut)
 async def update_settings(payload: LeagueSettingsIn, ctx: LeagueCtx, session: DbSession):
     ctx.require_commissioner()

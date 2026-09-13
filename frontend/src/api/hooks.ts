@@ -91,6 +91,14 @@ export function useImportLeague() {
   });
 }
 
+export function useDeleteLeague() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (leagueId: string) => api.delete<void>(`/leagues/${leagueId}`),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 export function useLeague(leagueId: string | undefined) {
   return useQuery({
     queryKey: keys.league(leagueId!),
