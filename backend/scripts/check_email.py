@@ -12,7 +12,9 @@ Run with the same values Render has:
     $env:EMAIL_FROM = 'WeeklyLay <parlay@weeklylay.com>'
     ./.venv/Scripts/python.exe scripts/check_email.py you@example.com
 
-Checks the key, lists what Resend considers verified, then optionally sends one real email.
+Sending one real email is the only authoritative check, so that is what this does. The
+domain listing beforehand is advisory: it needs a full-access key, while this app only
+needs a sending key, so being refused there says nothing about whether mail will go out.
 """
 
 import asyncio
@@ -20,6 +22,16 @@ import os
 import sys
 
 import httpx
+
+DOMAINS = "https://api.resend.com/domains"
+EMAILS = "https://api.resend.com/emails"
+
+
+def _explain_bad_key(body: str) -> None:
+    print(f"   Resend said: {body}")
+    print("   Resend reveals a key's full value only once, at creation. A value copied")
+    print("   from the dashboard afterwards is masked and can never work. If that is what")
+    print("   happened, create a new key and save the value it shows you that one time.")
 
 
 async def main() -> int:
@@ -32,6 +44,9 @@ async def main() -> int:
         print(__doc__)
         return 2
     print(f"RESEND_API_KEY   <{len(key)} chars>")
+    if key != key.strip():
+        print("!! The key has leading or trailing whitespace. Strip it.")
+        return 1
 
     if not sender:
         print("!! EMAIL_FROM is not set. Render must set it too, or the app falls back to")
@@ -45,32 +60,32 @@ async def main() -> int:
         print("   with no error. Use an address on your verified domain.")
         return 1
 
+    headers = {"Authorization": f"Bearer {key}"}
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(
-            "https://api.resend.com/domains", headers={"Authorization": f"Bearer {key}"}
-        )
-        if r.status_code == 401:
-            print("\n!! Resend rejected the API key (401). It is wrong, or it was revoked.")
-            return 1
-        if r.status_code >= 400:
-            print(f"\n!! Resend returned {r.status_code}: {r.text}")
-            return 1
+        # --- advisory: what does Resend consider verified? ---
+        r = await client.get(DOMAINS, headers=headers)
+        if r.status_code == 200:
+            domains = r.json().get("data", [])
+            print("\nDomains Resend knows about:")
+            for d in domains:
+                mark = "OK " if d.get("status") == "verified" else "NOT"
+                print(f"  {mark}  {d.get('name')}  status={d.get('status')}")
+            if not domains:
+                print("  (none)")
+            at = sender.split("@")[-1].rstrip(">").strip()
+            verified = any(
+                d.get("name") == at and d.get("status") == "verified" for d in domains
+            )
+            if domains and not verified:
+                print(f"\n!! EMAIL_FROM sends from '{at}', which is not verified above.")
+            elif verified:
+                print(f"\nEMAIL_FROM's domain '{at}' is verified.")
+        else:
+            print(f"\nCould not list domains (HTTP {r.status_code}) -- skipping that check.")
+            print("  A sending-only key is refused here and still sends fine, so this on its")
+            print("  own means nothing. The send below is what actually decides.")
 
-        domains = r.json().get("data", [])
-        print("\nDomains Resend knows about:")
-        if not domains:
-            print("  (none) -- nothing is verified, so sending will fail.")
-            return 1
-        for d in domains:
-            mark = "OK  " if d.get("status") == "verified" else "NOT "
-            print(f"  {mark} {d.get('name')}  status={d.get('status')}")
-
-        at = sender.split("@")[-1].rstrip(">").strip()
-        if not any(d.get("name") == at and d.get("status") == "verified" for d in domains):
-            print(f"\n!! EMAIL_FROM sends from '{at}', which is not a verified domain above.")
-            return 1
-        print(f"\nEMAIL_FROM's domain '{at}' is verified.")
-
+        # --- authoritative: actually send ---
         if not to:
             print("\nPass an address to send a real test email:")
             print("  ./.venv/Scripts/python.exe scripts/check_email.py you@example.com")
@@ -78,22 +93,32 @@ async def main() -> int:
 
         print(f"\nSending a test email to {to} ...")
         r = await client.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {key}"},
+            EMAILS,
+            headers=headers,
             json={
                 "from": sender,
                 "to": [to],
                 "subject": "WeeklyLay: notification test",
                 "html": (
-                    "<p>If you are reading this, WeeklyLay can send email: the API key is "
-                    "good, the domain is verified, and the from-address is accepted.</p>"
+                    "<p>If you are reading this, WeeklyLay can send email: the key is good, "
+                    "the domain is verified, and the from-address is accepted.</p>"
                     "<p>This is the same path the round-opened and reminder emails use.</p>"
                 ),
             },
         )
-        if r.status_code >= 400:
-            print(f"!! Resend rejected it: {r.status_code} {r.text}")
+
+        if r.status_code in (400, 401, 403) and "api key" in r.text.lower():
+            print(f"!! The API key is not valid for sending (HTTP {r.status_code}).")
+            _explain_bad_key(r.text)
             return 1
+        if r.status_code >= 400:
+            print(f"!! Resend refused the send: HTTP {r.status_code}")
+            print(f"   {r.text}")
+            if "domain" in r.text.lower():
+                print("   Looks like a domain problem: the from-address must be on a domain")
+                print("   showing 'verified' in Resend, not merely added.")
+            return 1
+
         print(f"Accepted by Resend (id {r.json().get('id')}). Check the inbox, and spam.")
         return 0
 
