@@ -55,10 +55,46 @@
       "Bash(./.venv/Scripts/python.exe -m alembic check)",
       "Bash(cd \"c:/Users/gmbel/OneDrive/Desktop/VSCode/fantasy-weekly-parlay-v2/backend\" && rm -f _migcheck.db && echo \"cleaned\")",
       "Bash(git check-ignore *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Bash(git config *)",
+      "Bash(./backend/.venv/Scripts/python.exe -c ' *)",
+      "Bash(grep -iE \"key|secret|token|cred|\\\\.env$\")",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(./.venv/Scripts/python.exe scripts/check_db.py)",
+      "Bash(DATABASE_URL='postgresql://neondb_owner:secret123@ep-x-pooler.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require *)",
+      "Bash(DATABASE_URL=\"postgresql+asyncpg://neondb_owner:npg_PaDYQk7UOB3J@ep-empty-forest-ar3ayz9k.c-4.us-west-2.aws.neon.tech/neondb?ssl=require\" ./.venv/Scripts/python.exe scripts/check_db.py)",
+      "Bash(curl -s -m 90 -w \"\\\\nHTTP %{http_code} in %{time_total}s\\\\n\" https://parlay-api.onrender.com/health)",
+      "Bash(curl -s -m 240 -w \"\\\\nHTTP %{http_code} in %{time_total}s\\\\n\" https://parlay-api.onrender.com/health)",
+      "Bash(curl -s -m 180 -w \"\\\\nHTTP %{http_code} in %{time_total}s\\\\n\" https://parlay-api-k5k5.onrender.com/health)",
+      "Bash(curl -s -m 30 -o /dev/null -w 'HTTP %{http_code}\\\\n' https://parlay-api-k5k5.onrender.com/me)",
+      "Bash(curl -s -m 30 -w '\\\\nHTTP %{http_code}\\\\n' -X POST https://parlay-api-k5k5.onrender.com/auth/google -H 'Content-Type: application/json' -d '{\"credential\":\"junk\"}')",
+      "Bash(curl -s -m 30 -i -X OPTIONS https://parlay-api-k5k5.onrender.com/me -H 'Origin: https://app.weeklylay.com' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: content-type')",
+      "Bash(curl -s -m 120 -w '\\\\nHTTP %{http_code} | TLS %{ssl_verify_result} \\(0=valid\\) | %{time_total}s\\\\n' https://api.weeklylay.com/health)",
+      "Bash(curl -s -m 60 -i -X OPTIONS https://api.weeklylay.com/me -H 'Origin: https://app.weeklylay.com' -H 'Access-Control-Request-Method: GET')",
+      "Bash(npm view *)",
+      "Bash(npx -y plugins add vercel/vercel-plugin)",
+      "Read(//c/Users/gmbel/.claude/**)",
+      "Read(//c/Users/gmbel/.cursor/**)",
+      "Bash(cd \"c:/Users/gmbel/OneDrive/Desktop/VSCode/fantasy-weekly-parlay-v2\" && echo \"=== images in project ===\" && find . -path ./node_modules -prune -o -type f \\\\\\( -iname \"*.png\" -o -iname \"*.jpg\" -o -iname \"*.jpeg\" -o -iname \"*.webp\" -o -iname \"*.svg\" \\\\\\) -print 2>/dev/null | grep -v node_modules | head -20 *)",
+      "Read(//c/Users/gmbel/Downloads/**)",
+      "Bash(../backend/.venv/Scripts/python.exe -c ' *)",
+      "Bash(grep -rhoE \"\\\\b\\(bg|text|border|ring|from|to\\)-\\(slate|emerald|amber|red|green|blue\\)-[0-9]{2,3}\" src/)",
+      "Bash(./backend/.venv/Scripts/python.exe -)",
+      "Bash(cd \"c:/Users/gmbel/OneDrive/Desktop/VSCode/fantasy-weekly-parlay-v2/frontend\" && cp \"C:/Users/gmbel/Downloads/WeeklyLay_logo_white_tail.png\" public/weeklylay-logo.png && ls -la public/ && echo \"=== exact hex usage contexts ===\" && grep -rhoE \"\\(bg|border|hover:bg\\)-\\\\[#[0-9a-f]{6}\\\\]\" src/ | sort | uniq -c)",
+      "Bash(./.venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000)",
+      "Bash(curl -s --retry 20 --retry-all-errors --retry-delay 1 --max-time 40 http://127.0.0.1:8000/health)",
+      "Bash(curl -s --retry 20 --retry-all-errors --retry-delay 1 --max-time 40 -o /dev/null -w \"frontend HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "PowerShell(Start-Process \"http://localhost:5173\")",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(curl -s -m 60 -o /dev/null -w \"HTTP %{http_code}, %{size_download} bytes\\\\n\" https://app.weeklylay.com/weeklylay-logo.png)",
+      "Bash(curl -s -m 60 https://app.weeklylay.com/)",
+      "Bash(xargs -I{} echo \"  #01c46e occurrences: {}\")"
     ],
     "additionalDirectories": [
-      "c:\\Users\\gmbel\\OneDrive\\Desktop\\VSCode\\fantasy-weekly-parlay-v2\\backend"
+      "c:\\Users\\gmbel\\OneDrive\\Desktop\\VSCode\\fantasy-weekly-parlay-v2\\backend",
+      "C:\\Users\\gmbel\\Downloads"
     ]
   }
 }
