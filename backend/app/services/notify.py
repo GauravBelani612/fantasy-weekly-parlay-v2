@@ -245,46 +245,77 @@ async def notify_round(
             )
             sent.append(KIND_REMINDER)
 
-    # 3. All legs in -- the loser can go place the bet without waiting for the deadline.
-    if status == STATUS_OPEN and eligible and len(submitted_ids) == len(eligible) and loser_email:
-        if not await _already_sent(session, rnd.id, KIND_ALL_LEGS_IN, "email", loser_email):
-            if await _record(session, rnd.id, KIND_ALL_LEGS_IN, "email", loser_email):
-                await send_email(
-                    loser_email,
-                    f"{league.name.strip()}: all {len(round_legs)} legs are in"
-                    f" - time to place it",
-                    tpl.legs_ready(
-                        league_name=league.name,
-                        loser_name=loser_name,
-                        bet_week=rnd.bet_week,
-                        deadline=_deadline_text(rnd, league),
-                        legs=[(x.raw_text, names.get(x.member_id, "")) for x in round_legs],
-                        url=league_url,
-                        locked=False,
-                        missing_names=[],
-                    ),
+    # 3 and 4. The finished parlay, to the whole league.
+    #
+    # Everyone contributed a leg, so everyone gets to see what it became -- not just the
+    # person paying for it. The payer's copy is framed differently (go and place this)
+    # and is the only one carrying the paste-ready block.
+    leg_pairs = [(x.raw_text, names.get(x.member_id, "")) for x in round_legs]
+    deadline = _deadline_text(rnd, league)
+
+    def _body(is_payer: bool, locked: bool) -> str:
+        return tpl.legs_ready(
+            league_name=league.name,
+            loser_name=loser_name,
+            bet_week=rnd.bet_week,
+            deadline=deadline,
+            legs=leg_pairs,
+            url=league_url,
+            locked=locked,
+            missing_names=missing_names if locked else [],
+            is_payer=is_payer,
+        )
+
+    everyone_in = bool(eligible) and len(submitted_ids) == len(eligible)
+
+    if status == STATUS_OPEN and everyone_in:
+        for person in recipients:
+            if await _already_sent(session, rnd.id, KIND_ALL_LEGS_IN, "email", person.email):
+                continue
+            if not await _record(session, rnd.id, KIND_ALL_LEGS_IN, "email", person.email):
+                continue
+            payer = loser_email is not None and person.email == loser_email
+            subject = (
+                f"{league.name.strip()}: all {len(round_legs)} legs are in - time to place it"
+                if payer
+                else f"{league.name.strip()}: the week {rnd.bet_week} parlay is set"
+                f" - {len(round_legs)} legs"
+            )
+            await send_email(person.email, subject, _body(payer, locked=False))
+            sent.append(KIND_ALL_LEGS_IN)
+
+        if league.discord_webhook_url and not await _already_sent(
+            session, rnd.id, KIND_ALL_LEGS_IN, "discord", "webhook"
+        ):
+            if await _record(session, rnd.id, KIND_ALL_LEGS_IN, "discord", "webhook"):
+                lines = "\n".join(
+                    f"{i}. {text} - {who}" for i, (text, who) in enumerate(leg_pairs, 1)
+                )
+                await send_webhook(
+                    league.discord_webhook_url,
+                    f"**Week {rnd.bet_week} parlay is set** - all {len(round_legs)} legs in, "
+                    f"funded by {loser_name}.\n{lines}\n{league_url}",
                 )
                 sent.append(KIND_ALL_LEGS_IN)
 
-    # 4. Locked -- final list, whether or not everyone submitted.
-    if status == STATUS_LOCKED and loser_email:
-        if not await _already_sent(session, rnd.id, KIND_LOCKED, "email", loser_email):
-            if await _record(session, rnd.id, KIND_LOCKED, "email", loser_email):
-                await send_email(
-                    loser_email,
-                    f"{league.name.strip()}: week {rnd.bet_week} parlay is locked"
-                    f" - {len(round_legs)} legs",
-                    tpl.legs_ready(
-                        league_name=league.name,
-                        loser_name=loser_name,
-                        bet_week=rnd.bet_week,
-                        deadline=_deadline_text(rnd, league),
-                        legs=[(x.raw_text, names.get(x.member_id, "")) for x in round_legs],
-                        url=league_url,
-                        locked=True,
-                        missing_names=missing_names,
-                    ),
-                )
-                sent.append(KIND_LOCKED)
+    # 4. Locked -- the final list, to anyone the early send did not already reach.
+    if status == STATUS_LOCKED:
+        for person in recipients:
+            # Skip people who already saw this exact list when the board filled early;
+            # otherwise a league that submits on time gets the same parlay twice.
+            if await _already_sent(session, rnd.id, KIND_ALL_LEGS_IN, "email", person.email):
+                continue
+            if await _already_sent(session, rnd.id, KIND_LOCKED, "email", person.email):
+                continue
+            if not await _record(session, rnd.id, KIND_LOCKED, "email", person.email):
+                continue
+            payer = loser_email is not None and person.email == loser_email
+            await send_email(
+                person.email,
+                f"{league.name.strip()}: week {rnd.bet_week} parlay is locked"
+                f" - {len(round_legs)} legs",
+                _body(payer, locked=True),
+            )
+            sent.append(KIND_LOCKED)
 
     return sent

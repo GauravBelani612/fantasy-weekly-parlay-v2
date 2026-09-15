@@ -72,7 +72,8 @@ async def test_round_opened_sends_once_per_person(session, outbox, open_round):
     assert len(outbox["webhook"]) == 1, "no duplicate webhook posts"
 
 
-async def test_loser_is_told_once_when_every_leg_is_in(session, outbox, open_round):
+async def test_whole_league_gets_the_parlay_when_every_leg_is_in(session, outbox, open_round):
+    """Everyone contributed a leg, so everyone sees what it became."""
     league, rnd = open_round["league"], open_round["round"]
 
     await notify.notify_round(session, league, rnd, "https://app.example")
@@ -84,11 +85,16 @@ async def test_loser_is_told_once_when_every_leg_is_in(session, outbox, open_rou
 
     sent = await notify.notify_round(session, league, rnd, "https://app.example")
     assert notify.KIND_ALL_LEGS_IN in sent
-    assert len(outbox["email"]) == 1
-    assert "all 2 legs are in" in outbox["email"][0][1]
+
+    by_to = dict(outbox["email"])
+    assert set(by_to) == {"alice@example.com", "bob@example.com"}
+
+    # Alice is the payer and is told to go and place it; Bob is only shown the result.
+    assert "time to place it" in by_to["alice@example.com"]
+    assert "parlay is set" in by_to["bob@example.com"]
 
     await notify.notify_round(session, league, rnd, "https://app.example")
-    assert len(outbox["email"]) == 1, "the loser is told exactly once"
+    assert len(outbox["email"]) == 2, "each person is told exactly once"
 
 
 async def test_reminder_only_inside_the_final_day(session, outbox, open_round):
@@ -113,7 +119,7 @@ async def test_reminder_only_inside_the_final_day(session, outbox, open_round):
     assert [to for to, _ in outbox["email"]] == ["bob@example.com"]
 
 
-async def test_locked_round_emails_the_loser_the_final_list(session, outbox, open_round):
+async def test_locked_round_emails_the_final_list_to_everyone(session, outbox, open_round):
     league, rnd = open_round["league"], open_round["round"]
     session.add(Leg(round_id=rnd.id, member_id=open_round["bob_m"].id, raw_text="Bills -3.5"))
     rnd.locks_at = datetime.now(UTC) - timedelta(minutes=5)
@@ -121,12 +127,37 @@ async def test_locked_round_emails_the_loser_the_final_list(session, outbox, ope
     await session.commit()
 
     sent = await notify.notify_round(session, league, rnd, "https://app.example")
-    assert sent == [notify.KIND_LOCKED]
-    assert outbox["email"][0][0] == "alice@example.com"
-    assert "locked" in outbox["email"][0][1]
+    assert sent == [notify.KIND_LOCKED, notify.KIND_LOCKED]
+    assert {to for to, _ in outbox["email"]} == {"alice@example.com", "bob@example.com"}
+    assert all("locked" in subject for _, subject in outbox["email"])
 
     await notify.notify_round(session, league, rnd, "https://app.example")
-    assert len(outbox["email"]) == 1
+    assert len(outbox["email"]) == 2
+
+
+async def test_locked_does_not_repeat_the_list_people_already_got(session, outbox, open_round):
+    """A league that submits on time must not receive the same parlay twice.
+
+    The early send and the lock send carry an identical list, so the lock pass skips
+    anyone the all-legs-in pass already reached.
+    """
+    league, rnd = open_round["league"], open_round["round"]
+    session.add(Leg(round_id=rnd.id, member_id=open_round["alice_m"].id, raw_text="Chase o89.5"))
+    session.add(Leg(round_id=rnd.id, member_id=open_round["bob_m"].id, raw_text="KC ML"))
+    await session.commit()
+
+    await notify.notify_round(session, league, rnd, "https://app.example")
+    early = {to for to, _ in outbox["email"]}
+    assert early == {"alice@example.com", "bob@example.com"}
+    outbox["email"].clear()
+
+    rnd.locks_at = datetime.now(UTC) - timedelta(minutes=5)
+    session.add(rnd)
+    await session.commit()
+
+    sent = await notify.notify_round(session, league, rnd, "https://app.example")
+    assert notify.KIND_LOCKED not in sent
+    assert outbox["email"] == []
 
 
 async def test_deadline_text_is_portable_and_localized(open_round):

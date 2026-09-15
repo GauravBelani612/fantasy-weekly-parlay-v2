@@ -277,29 +277,60 @@ def legs_ready(
     url: str,
     locked: bool,
     missing_names: list[str],
+    is_payer: bool = True,
 ) -> str:
+    """The finished parlay.
+
+    Everyone who put a leg in gets to see what it became, so this serves two audiences.
+    The payer is being told to go and place it; everyone else is being shown the result.
+    Only the payer gets the copy block, since only they are pasting it anywhere.
+    """
+    count = len(legs)
+
     if locked:
         heading = f"Week {bet_week} parlay is locked"
-        intro = _p(f"Final list, {len(legs)} legs. Nothing can change now.")
+        if is_payer:
+            intro = _p(f"Final list, {count} legs. Nothing can change now.")
+        else:
+            intro = _p(
+                f"Final list, {count} legs. "
+                f"{escape(loser_name)} is placing it."
+            )
         if missing_names:
             names = ", ".join(escape(n) for n in missing_names)
             intro += _p(
                 f'<span style="color:{MUTED};">Did not submit: {names}</span>', size=14
             )
-        pre = f"{len(legs)} legs, final. You are placing this one."
-    else:
-        heading = "Everyone is in"
-        intro = _p(
-            f"All {len(legs)} legs are in with time to spare, so you can place it now "
-            f"rather than waiting for {escape(deadline)}."
+        pre = (
+            f"{count} legs, final. You are placing this one."
+            if is_payer
+            else f"{count} legs, final. {loser_name} is placing it."
         )
-        pre = f"All {len(legs)} legs are in early. Ready to place."
+    else:
+        if is_payer:
+            heading = "Everyone is in"
+            intro = _p(
+                f"All {count} legs are in with time to spare, so you can place it now "
+                f"rather than waiting for {escape(deadline)}."
+            )
+            pre = f"All {count} legs are in early. Ready to place."
+        else:
+            heading = "The parlay is set"
+            intro = _p(
+                f"All {count} legs are in. {escape(loser_name)} is funding it and will "
+                f"place it before {escape(deadline)}."
+            )
+            pre = f"All {count} legs are in. Here is the full parlay."
 
-    body = (
-        intro
-        + _callout("You are funding this", loser_name, f"Week {bet_week} parlay")
-        + leg_list(legs)
-        + copy_block(legs)
-        + _button("Open the board", url)
+    callout = (
+        _callout("You are funding this", loser_name, f"Week {bet_week} parlay")
+        if is_payer
+        else _callout("Funding this week", loser_name, f"Week {bet_week} parlay")
     )
+
+    body = intro + callout + leg_list(legs)
+    if is_payer:
+        body += copy_block(legs)
+    body += _button("Open the board", url)
+
     return shell(preheader=pre, heading=heading, body=body, league_name=league_name)
