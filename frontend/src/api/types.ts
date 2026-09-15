@@ -30,6 +30,9 @@ export interface SleeperLeague {
   total_rosters: number;
   avatar_url: string | null;
   already_imported: boolean;
+  /** Never finished being set up in Sleeper, so almost certainly an abandoned twin
+   *  of a real league. Hidden from the list unless asked for. */
+  unconfigured: boolean;
 }
 
 export interface Member {

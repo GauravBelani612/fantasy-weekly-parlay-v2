@@ -44,6 +44,11 @@ class SleeperLeagueOut(BaseModel):
     total_rosters: int
     avatar_url: str | None = None
     already_imported: bool = False
+    # Sleeper leagues that were created and abandoned keep showing up in the account's
+    # league list forever, indistinguishable by name from the real one. A league nobody
+    # finished configuring has no playoff week, which is the one field that separates
+    # them reliably -- status stays "in_season" on both.
+    unconfigured: bool = False
 
 
 class ImportLeagueIn(BaseModel):

@@ -9,7 +9,7 @@ import {
   useMe,
   useMyLeagues,
 } from "../api/hooks";
-import type { League } from "../api/types";
+import type { League, SleeperLeague } from "../api/types";
 import { Button, ErrorNote, Panel, Spinner } from "../components/ui";
 
 function LinkSleeperCard() {
@@ -47,14 +47,54 @@ function LinkSleeperCard() {
   );
 }
 
+function ImportRow({
+  league,
+  onAdd,
+  pending,
+}: {
+  league: SleeperLeague;
+  onAdd: (id: string) => void;
+  pending: boolean;
+}) {
+  return (
+    <li className="flex items-center gap-3 rounded-lg border border-edge bg-input px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>
+        <p className="text-xs text-slate-500">
+          {league.season} &middot; {league.total_rosters} teams
+          {league.unconfigured && " · no playoffs set"}
+        </p>
+      </div>
+      {league.already_imported ? (
+        <span className="text-xs font-semibold text-emerald-400">Added</span>
+      ) : (
+        <Button
+          variant="ghost"
+          disabled={pending}
+          onClick={() => onAdd(league.sleeper_league_id)}
+        >
+          Add
+        </Button>
+      )}
+    </li>
+  );
+}
+
 function ImportLeagues({ season }: { season?: string }) {
   const importable = useImportableLeagues(season, true);
   const importLeague = useImportLeague();
+  const [showIncomplete, setShowIncomplete] = useState(false);
 
   if (importable.isLoading) return <Spinner label="Looking up your Sleeper leagues..." />;
   if (importable.error) return <ErrorNote error={importable.error} />;
 
   const available = importable.data ?? [];
+  // A league nobody finished configuring in Sleeper is almost always an abandoned twin
+  // of a real one. Adding it gives the league a second parlay every week, with its own
+  // payer and its own emails, so it stays out of the list unless deliberately asked for.
+  const real = available.filter((l) => !l.unconfigured);
+  const incomplete = available.filter((l) => l.unconfigured);
+
   if (available.length === 0) {
     return (
       <p className="text-sm text-slate-400">
@@ -64,33 +104,58 @@ function ImportLeagues({ season }: { season?: string }) {
   }
 
   return (
-    <ul className="space-y-2">
-      {available.map((league) => (
-        <li
-          key={league.sleeper_league_id}
-          className="flex items-center gap-3 rounded-lg border border-edge bg-input px-3 py-2"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-100">{league.name}</p>
-            <p className="text-xs text-slate-500">
-              {league.season} &middot; {league.total_rosters} teams
-            </p>
-          </div>
-          {league.already_imported ? (
-            <span className="text-xs font-semibold text-emerald-400">Added</span>
-          ) : (
-            <Button
-              variant="ghost"
-              disabled={importLeague.isPending}
-              onClick={() => importLeague.mutate(league.sleeper_league_id)}
-            >
-              Add
-            </Button>
+    <>
+      {real.length === 0 ? (
+        <p className="text-sm text-slate-400">
+          Nothing here looks like a finished league &mdash; every one is missing its playoff
+          settings.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {real.map((league) => (
+            <ImportRow
+              key={league.sleeper_league_id}
+              league={league}
+              onAdd={(id) => importLeague.mutate(id)}
+              pending={importLeague.isPending}
+            />
+          ))}
+        </ul>
+      )}
+
+      {incomplete.length > 0 && (
+        <div className="mt-3 border-t border-edge pt-3">
+          <button
+            onClick={() => setShowIncomplete((v) => !v)}
+            className="text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+          >
+            {showIncomplete ? "Hide" : "Show"} {incomplete.length} unfinished{" "}
+            {incomplete.length === 1 ? "league" : "leagues"}
+          </button>
+          {showIncomplete && (
+            <>
+              <p className="mt-2 mb-2 text-xs text-slate-500">
+                These have no playoff weeks set in Sleeper, which usually means they were
+                created and abandoned. Adding one gives your league a second parlay every
+                week, with its own payer and its own emails.
+              </p>
+              <ul className="space-y-2">
+                {incomplete.map((league) => (
+                  <ImportRow
+                    key={league.sleeper_league_id}
+                    league={league}
+                    onAdd={(id) => importLeague.mutate(id)}
+                    pending={importLeague.isPending}
+                  />
+                ))}
+              </ul>
+            </>
           )}
-        </li>
-      ))}
+        </div>
+      )}
+
       <ErrorNote error={importLeague.error} />
-    </ul>
+    </>
   );
 }
 

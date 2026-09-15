@@ -81,6 +81,22 @@ async def unlink_sleeper_account(user: CurrentUser, session: DbSession) -> None:
         await session.commit()
 
 
+def _is_unconfigured(item: dict) -> bool:
+    """True for a Sleeper league nobody finished setting up.
+
+    An abandoned league stays in the owner's list indefinitely, still reporting
+    status "in_season" with a full set of drafted rosters, so neither of those
+    separates it from the real thing. Not having a playoff week does: every league
+    that was actually configured has one, and importing an abandoned twin means the
+    league gets two parlays, two payers and two sets of email every week.
+    """
+    settings = item.get("settings") or {}
+    try:
+        return int(settings.get("playoff_week_start") or 0) <= 0
+    except (TypeError, ValueError):
+        return False
+
+
 @router.get("/sleeper/leagues", response_model=list[SleeperLeagueOut])
 async def list_importable_leagues(
     user: CurrentUser,
@@ -124,6 +140,7 @@ async def list_importable_leagues(
             total_rosters=int(item.get("total_rosters") or 0),
             avatar_url=avatar_url(item.get("avatar")),
             already_imported=str(item.get("league_id")) in imported,
+            unconfigured=_is_unconfigured(item),
         )
         for item in raw
     ]
