@@ -8,7 +8,6 @@ does not get spammed.
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from html import escape
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
@@ -17,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.integrations.http import get_client
-from app.models import League, LeagueMember, NotificationLog, ParlayRound, User
+from app.models import League, LeagueMember, NotificationLog, ParlayRound, User, WeekScore
+from app.services import email_templates as tpl
 from app.services import legs as legs_service
 from app.services.rounds import STATUS_LOCKED, STATUS_OPEN, round_status
 
@@ -124,15 +124,26 @@ def _deadline_text(rnd: ParlayRound, league: League) -> str:
     return f"{locks.strftime('%a %b %d, %I:%M %p').replace(' 0', ' ')} {label}"
 
 
-def _round_opened_body(league: League, rnd: ParlayRound, loser_name: str, url: str) -> str:
-    points = f"{rnd.loser_points:.2f}" if rnd.loser_points is not None else "?"
-    return f"""
-    <p><strong>{escape(loser_name)}</strong> was low scorer in week {rnd.scored_week}
-    ({points} pts) and is funding this week's parlay.</p>
-    <p>Submit your leg for <strong>week {rnd.bet_week}</strong> before
-    {_deadline_text(rnd, league)}.</p>
-    <p><a href="{url}">Submit your leg</a></p>
+async def _week_scores(
+    session: AsyncSession, league: League, rnd: ParlayRound
+) -> list[tuple[str, float]]:
+    """Every roster's score for the scored week, lowest first.
+
+    Already cached for the loser calculation, so putting it in the email costs one query
+    and answers the question everyone asks anyway: how close was it.
     """
+    stmt = (
+        select(LeagueMember.display_name, WeekScore.points)
+        .join(WeekScore, WeekScore.sleeper_roster_id == LeagueMember.sleeper_roster_id)
+        .where(
+            LeagueMember.league_id == league.id,
+            WeekScore.league_id == league.id,
+            WeekScore.season == league.season,
+            WeekScore.week == rnd.scored_week,
+        )
+        .order_by(WeekScore.points.asc())
+    )
+    return [(row[0], float(row[1])) for row in (await session.execute(stmt)).all()]
 
 
 async def notify_round(
@@ -157,6 +168,8 @@ async def notify_round(
     round_legs = await legs_service.list_legs(session, rnd)
     eligible = await legs_service.eligible_members(session, rnd)
     submitted_ids = {leg.member_id for leg in round_legs}
+    missing = [m for m in eligible if m.id not in submitted_ids]
+    missing_names = [m.display_name for m in missing]
 
     # Names are resolved up front: touching leg.member lazily would trigger IO outside
     # the async greenlet and raise MissingGreenlet.
@@ -174,8 +187,18 @@ async def notify_round(
                 continue
             await send_email(
                 person.email,
-                f"{league.name}: {loser_name} lost week {rnd.scored_week} - submit your leg",
-                _round_opened_body(league, rnd, loser_name, league_url),
+                f"{league.name.strip()}: {loser_name} lost week {rnd.scored_week}"
+                f" - submit your leg",
+                tpl.round_opened(
+                    league_name=league.name,
+                    loser_name=loser_name,
+                    loser_points=rnd.loser_points,
+                    scored_week=rnd.scored_week,
+                    bet_week=rnd.bet_week,
+                    deadline=_deadline_text(rnd, league),
+                    scores=await _week_scores(session, league, rnd),
+                    url=league_url,
+                ),
             )
             sent.append(KIND_ROUND_OPENED)
 
@@ -196,7 +219,6 @@ async def notify_round(
         rnd.locks_at if rnd.locks_at.tzinfo else rnd.locks_at.replace(tzinfo=UTC)
     ) - datetime.now(UTC)
     if status == STATUS_OPEN and 0 < remaining.total_seconds() <= REMINDER_WINDOW_SECONDS:
-        missing = [m for m in eligible if m.id not in submitted_ids]
         for member in missing:
             if not member.user_id:
                 continue
@@ -209,9 +231,17 @@ async def notify_round(
                 continue
             await send_email(
                 user.email,
-                f"{league.name}: your week {rnd.bet_week} leg is still missing",
-                f"<p>Legs lock at {_deadline_text(rnd, league)}."
-                f' <a href="{league_url}">Submit yours</a>.</p>',
+                f"{league.name.strip()}: your week {rnd.bet_week} leg is still missing",
+                tpl.reminder(
+                    league_name=league.name,
+                    loser_name=loser_name,
+                    bet_week=rnd.bet_week,
+                    deadline=_deadline_text(rnd, league),
+                    missing_names=missing_names,
+                    submitted=len(submitted_ids),
+                    eligible=len(eligible),
+                    url=league_url,
+                ),
             )
             sent.append(KIND_REMINDER)
 
@@ -221,8 +251,18 @@ async def notify_round(
             if await _record(session, rnd.id, KIND_ALL_LEGS_IN, "email", loser_email):
                 await send_email(
                     loser_email,
-                    f"{league.name}: all {len(round_legs)} legs are in - time to place it",
-                    _legs_html(round_legs, names, league_url),
+                    f"{league.name.strip()}: all {len(round_legs)} legs are in"
+                    f" - time to place it",
+                    tpl.legs_ready(
+                        league_name=league.name,
+                        loser_name=loser_name,
+                        bet_week=rnd.bet_week,
+                        deadline=_deadline_text(rnd, league),
+                        legs=[(x.raw_text, names.get(x.member_id, "")) for x in round_legs],
+                        url=league_url,
+                        locked=False,
+                        missing_names=[],
+                    ),
                 )
                 sent.append(KIND_ALL_LEGS_IN)
 
@@ -232,18 +272,19 @@ async def notify_round(
             if await _record(session, rnd.id, KIND_LOCKED, "email", loser_email):
                 await send_email(
                     loser_email,
-                    f"{league.name}: week {rnd.bet_week} parlay is locked - {len(round_legs)} legs",
-                    _legs_html(round_legs, names, league_url),
+                    f"{league.name.strip()}: week {rnd.bet_week} parlay is locked"
+                    f" - {len(round_legs)} legs",
+                    tpl.legs_ready(
+                        league_name=league.name,
+                        loser_name=loser_name,
+                        bet_week=rnd.bet_week,
+                        deadline=_deadline_text(rnd, league),
+                        legs=[(x.raw_text, names.get(x.member_id, "")) for x in round_legs],
+                        url=league_url,
+                        locked=True,
+                        missing_names=missing_names,
+                    ),
                 )
                 sent.append(KIND_LOCKED)
 
     return sent
-
-
-def _legs_html(round_legs, names: dict, url: str) -> str:
-    items = "".join(
-        f"<li>{escape(leg.raw_text)} "
-        f"<em style='color:#888'>&mdash; {escape(names.get(leg.member_id, ''))}</em></li>"
-        for leg in round_legs
-    )
-    return f"<ol>{items}</ol><p><a href='{url}'>Open the board</a></p>"

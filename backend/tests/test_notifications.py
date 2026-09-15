@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 
 from app.models import Leg, ParlayRound
+from app.services import email_templates as tpl
 from app.services import notify
 
 
@@ -139,11 +140,39 @@ async def test_deadline_text_is_portable_and_localized(open_round):
 
 
 async def test_leg_text_is_escaped_into_email_html(open_round):
-    html = notify._legs_html(
-        [Leg(member_id=open_round["bob_m"].id, raw_text="<script>alert(1)</script>")],
-        {open_round["bob_m"].id: "Bob & Co"},
-        "https://app.example",
+    """Leg text is whatever someone typed, and it lands in an HTML email."""
+    html = tpl.legs_ready(
+        league_name="Bob & Co League",
+        loser_name="Bob & Co",
+        bet_week=2,
+        deadline="Thu Sep 17, 7:15 PM EDT",
+        legs=[("<script>alert(1)</script>", "Bob & Co")],
+        url="https://app.example",
+        locked=False,
+        missing_names=[],
     )
-    assert "<script>" not in html
+    assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
     assert "Bob &amp; Co" in html
+
+
+async def test_scoreboard_marks_only_the_low_scorer(open_round):
+    html = tpl.scoreboard([("Ann", 70.5), ("Bob", 99.25)], loser_name="Ann")
+    assert "70.50" in html and "99.25" in html
+    # The marker must land on the low scorer's row, not simply appear somewhere.
+    assert html.index("PAYS") < html.index("99.25")
+
+
+async def test_locked_email_names_who_never_submitted(open_round):
+    html = tpl.legs_ready(
+        league_name="L",
+        loser_name="Ann",
+        bet_week=2,
+        deadline="Thu Sep 17, 7:15 PM EDT",
+        legs=[("Bills -3.5", "Bob")],
+        url="https://app.example",
+        locked=True,
+        missing_names=["Carol", "Dave"],
+    )
+    assert "locked" in html.lower()
+    assert "Carol" in html and "Dave" in html
