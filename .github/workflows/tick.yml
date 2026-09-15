@@ -3,13 +3,30 @@ name: Parlay tick
 # Drives notifications only. Round open/lock state is derived from timestamps on every
 # read, so a missed run costs an email, never correctness.
 #
-# Every 30 minutes rather than every 15: GitHub bills a minimum of one minute per job, so
-# 30-minute spacing is ~1,440 min/month and stays inside the 2,000 free minutes a private
-# repo gets. Public repos have unlimited minutes and can safely go to */15.
+# GitHub's scheduler is best-effort and drops runs under load -- observed gaps here have
+# been two to six hours against a */30 schedule, and a skipped slot is gone rather than
+# queued. Redundancy is the only lever available, and it is free: this repo is public, so
+# Actions minutes are unlimited, and the notifications_log uniqueness constraint means an
+# extra run can never send anything twice.
+#
+# All times are UTC, which is what cron uses here.
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    # Monday night in the US is already Tuesday in UTC. Midnight Eastern is 04:00 UTC
+    # while the clocks are on EDT and 05:00 UTC after they go back on 1 Nov, so this
+    # covers both, then keeps trying until 07:59 in case a Monday night game runs long.
+    # Attempts before every game is final cost nothing: no round opens, so no mail sends.
+    - cron: "*/10 4-7 * * 2"
+
+    # Wednesday evening, when the reminder window opens 24h before the Thursday lock.
+    - cron: "*/15 22-23 * * 3"
+
+    # Thursday, around the lock itself.
+    - cron: "*/10 21-23 * * 4"
+
+    # Baseline for everything else, including result recording over the weekend.
+    - cron: "*/20 * * * *"
   workflow_dispatch:
 
 jobs:
