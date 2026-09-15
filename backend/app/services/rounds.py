@@ -147,6 +147,24 @@ def compute_loser(scores: dict[int, float]) -> LoserResult:
     return LoserResult(roster_id=tied[0], points=lowest, tie_roster_ids=[])
 
 
+async def _no_round(session: AsyncSession, league: League) -> ParlayRound | None:
+    """Give up on opening a round, keeping any schedule rows cached on the way in.
+
+    sync_week_schedule only flushes: flushing writes into the open transaction but does
+    not end it, and get_session neither commits nor is followed by anything that does. So
+    on every path that returns from here, the ESPN weeks fetched moments earlier are
+    discarded when the session closes, and the next request fetches them all over again --
+    the 15-minute TTL and the permanent cache of a finished week both stop meaning
+    anything.
+
+    That is dead weight for most of the year: before week 1 is final, at the end of the
+    regular season once bet_week passes 18, and all through the preseason, this is the
+    only path taken.
+    """
+    await session.commit()
+    return await get_latest_round(session, league)
+
+
 async def ensure_current_round(session: AsyncSession, league: League) -> ParlayRound | None:
     """Create or refresh the round the league should currently be filling in.
 
@@ -156,25 +174,25 @@ async def ensure_current_round(session: AsyncSession, league: League) -> ParlayR
     season = str(state.get("season") or league.season)
     if season != league.season:
         # League is from a past season; nothing new to open.
-        return await get_latest_round(session, league)
+        return await _no_round(session, league)
 
     hint_week = int(state.get("week") or 0)
     if hint_week <= 0:
-        return await get_latest_round(session, league)  # preseason
+        return await _no_round(session, league)  # preseason
 
     scored_week = await latest_final_week(session, season, hint_week)
     if scored_week is None or scored_week < league.first_scored_week:
-        return await get_latest_round(session, league)
+        return await _no_round(session, league)
     if scored_week > league.last_scored_week:
-        return await get_latest_round(session, league)
+        return await _no_round(session, league)
 
     bet_week = scored_week + 1
     if bet_week > espn.MAX_REGULAR_WEEK:
-        return await get_latest_round(session, league)
+        return await _no_round(session, league)
 
     bet_schedule = await sync_week_schedule(session, season, bet_week)
     if bet_schedule is None or bet_schedule.first_kickoff_at is None:
-        return await get_latest_round(session, league)
+        return await _no_round(session, league)
 
     locks_at = _as_utc(bet_schedule.first_kickoff_at) - timedelta(
         minutes=league.lock_offset_minutes
