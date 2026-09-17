@@ -155,11 +155,24 @@ export function LegRow({
   /** The payer or the commissioner. */
   canSettle: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  // Legs that can't settle without a person keep their controls open; anything else
-  // stays tidy behind a small toggle, for fixing a result that came out wrong.
+  // Collapsed by default: the leg and who placed it are what people scan the board for.
+  // How it was read and why it got its result are one click away.
+  const [expanded, setExpanded] = useState(false);
+  const [changing, setChanging] = useState(false);
+
+  // A leg that can't settle without a person shows its controls as soon as it opens.
+  // Anything else keeps them behind "Change result", so opening a leg just to see how it
+  // was read doesn't also lay out a row of buttons.
   const needsPerson = leg.needs_line || leg.result === "unresolved";
-  const showControls = canSettle && (needsPerson || open);
+  const detail = leg.result !== "needs_line" ? leg.grade_detail : null;
+  const expandable = Boolean(leg.read_as || detail || canSettle);
+  const detailsId = `leg-${leg.id}-details`;
+
+  const toggle = () => {
+    if (!expandable) return;
+    setExpanded((value) => !value);
+    setChanging(false);
+  };
 
   const tone =
     leg.result === "hit"
@@ -171,8 +184,27 @@ export function LegRow({
           : "border-edge bg-input";
 
   return (
-    <li className={`rounded-lg border px-3 py-2.5 ${tone}`}>
-      <div className="flex items-start gap-3">
+    <li className={`rounded-lg border ${tone}`}>
+      {/* A div rather than a <button>: it holds the avatar and stacked lines, which a
+          button may not legally contain. Role, tab stop and keys make it act as one. */}
+      <div
+        role={expandable ? "button" : undefined}
+        tabIndex={expandable ? 0 : undefined}
+        aria-expanded={expandable ? expanded : undefined}
+        aria-controls={expandable ? detailsId : undefined}
+        onClick={toggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggle();
+          }
+        }}
+        className={`flex items-start gap-3 rounded-lg px-3 py-2.5 outline-none ${
+          expandable
+            ? "cursor-pointer transition hover:bg-white/[0.03] focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+            : ""
+        }`}
+      >
         <span className="mt-0.5 w-4 shrink-0 text-right text-xs text-slate-600">{index + 1}</span>
         <Avatar
           member={{ display_name: leg.member_name, avatar_url: leg.member_avatar_url }}
@@ -181,36 +213,58 @@ export function LegRow({
         <div className="min-w-0 flex-1">
           <p className="text-sm text-slate-100">{leg.raw_text}</p>
           <p className="text-xs text-slate-500">{leg.member_name}</p>
-          {leg.read_as && (
-            <p className="mt-1 text-xs text-slate-500">
-              Read as <span className="text-slate-300">{leg.read_as}</span>
-            </p>
-          )}
-          {leg.grade_detail && leg.result !== "needs_line" && (
-            <p className="mt-0.5 text-xs text-slate-400">{leg.grade_detail}</p>
-          )}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <div className="flex shrink-0 items-center gap-2 self-center">
           <LegResultBadge result={leg.result} />
-          {canSettle && !needsPerson && (
-            <button
-              type="button"
-              onClick={() => setOpen((value) => !value)}
-              className="text-xs text-slate-500 transition hover:text-slate-300"
+          {expandable && (
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className={`h-4 w-4 text-slate-500 motion-safe:transition-transform ${
+                expanded ? "rotate-180" : ""
+              }`}
             >
-              {open ? "Close" : leg.result === "pending" ? "Settle" : "Change"}
-            </button>
+              <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           )}
         </div>
       </div>
 
-      {showControls && (
-        <SettleControls
-          leg={leg}
-          leagueId={leagueId}
-          roundId={roundId}
-          onDone={() => setOpen(false)}
-        />
+      {expanded && (
+        // Indented to sit under the leg text: 0.75rem padding + 1rem number + 0.75rem gap
+        // + 1.75rem avatar + 0.75rem gap.
+        <div id={detailsId} className="pr-3 pb-3 pl-20">
+          {leg.read_as && (
+            <p className="text-xs text-slate-500">
+              Read as <span className="text-slate-300">{leg.read_as}</span>
+            </p>
+          )}
+          {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
+
+          {canSettle &&
+            (needsPerson || changing ? (
+              <SettleControls
+                leg={leg}
+                leagueId={leagueId}
+                roundId={roundId}
+                onDone={() => {
+                  setChanging(false);
+                  setExpanded(false);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setChanging(true)}
+                className="mt-2 text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+              >
+                {leg.result === "pending" ? "Settle by hand" : "Change result"}
+              </button>
+            ))}
+        </div>
       )}
     </li>
   );
