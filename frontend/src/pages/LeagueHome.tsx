@@ -11,6 +11,7 @@ import {
 } from "../api/hooks";
 import type { LeagueDetail, Round } from "../api/types";
 import { Countdown, formatDeadline } from "../components/Countdown";
+import { LegRow, OutcomePill } from "../components/Legs";
 import { Avatar, Button, ErrorNote, Panel, Spinner, StatusPill } from "../components/ui";
 
 function LoserCard({ round, league }: { round: Round; league: LeagueDetail }) {
@@ -181,7 +182,15 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
   );
 }
 
-function LegBoard({ round }: { round: Round }) {
+function LegBoard({
+  round,
+  leagueId,
+  canSettle,
+}: {
+  round: Round;
+  leagueId: string;
+  canSettle: boolean;
+}) {
   return (
     <Panel>
       <div className="mb-3 flex items-baseline justify-between">
@@ -198,26 +207,14 @@ function LegBoard({ round }: { round: Round }) {
       ) : (
         <ol className="space-y-2">
           {round.legs.map((leg, index) => (
-            <li
+            <LegRow
               key={leg.id}
-              className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
-                leg.is_you
-                  ? "border-emerald-500/40 bg-emerald-500/5"
-                  : "border-edge bg-input"
-              }`}
-            >
-              <span className="mt-0.5 w-4 shrink-0 text-right text-xs text-slate-600">
-                {index + 1}
-              </span>
-              <Avatar
-                member={{ display_name: leg.member_name, avatar_url: leg.member_avatar_url }}
-                size={28}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-slate-100">{leg.raw_text}</p>
-                <p className="text-xs text-slate-500">{leg.member_name}</p>
-              </div>
-            </li>
+              leg={leg}
+              index={index}
+              leagueId={leagueId}
+              roundId={round.id}
+              canSettle={canSettle}
+            />
           ))}
         </ol>
       )}
@@ -304,6 +301,7 @@ export function LeagueHome() {
         <>
           <div className="flex flex-wrap items-center gap-3">
             <StatusPill status={data.status} />
+            <OutcomePill outcome={data.outcome} />
             <span className="text-sm text-slate-400">
               {data.status === "locked" ? "Locked " : "Locks in "}
               <Countdown target={data.locks_at} />
@@ -315,7 +313,12 @@ export function LeagueHome() {
 
           <LoserCard round={data} league={league.data} />
           <LegForm round={data} leagueId={leagueId!} />
-          <LegBoard round={data} />
+          <LegBoard
+            round={data}
+            leagueId={leagueId!}
+            // The payer saw the real sportsbook lines; the commissioner settles disputes.
+            canSettle={league.data.your_role === "commissioner" || Boolean(data.loser?.is_you)}
+          />
         </>
       )}
     </div>

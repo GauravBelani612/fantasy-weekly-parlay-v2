@@ -27,7 +27,8 @@ Thu 8:15pm  TNF kicks off
 | Web | React 19 + TypeScript + Vite + TanStack Query + Tailwind 4 |
 | DB | SQLite locally, Neon Postgres in production |
 | Auth | Google Identity Services → our own JWT session cookie |
-| Data | Sleeper API (scores/rosters), ESPN (kickoff times, finality) |
+| Data | Sleeper API (scores/rosters), ESPN (kickoff times, finality, box scores) |
+| Legs | Claude reads free-text legs; graded against ESPN box scores |
 | Notify | Resend email + Discord/Slack webhook |
 | Cron | GitHub Actions → `POST /internal/tick` |
 
@@ -125,7 +126,7 @@ sidestep it.
 ## Tests
 
 ```bash
-cd backend && ./.venv/Scripts/python.exe -m pytest -q     # 28 tests
+cd backend && ./.venv/Scripts/python.exe -m pytest -q     # 114 tests
 cd frontend && npm run build                              # type-check + build
 ```
 
@@ -142,9 +143,24 @@ continuously, so without that gate the app would crown a "loser" halfway through
 **Ties are never broken automatically.** A tie for lowest is surfaced and the commissioner
 decides who pays.
 
-**`raw_text` is the permanent source of truth.** Legs are stored exactly as typed. The
-planned LLM normalization pass writes to a separate `parsed` column, so a bad parse can
-never destroy what someone meant to bet.
+**`raw_text` is the permanent source of truth.** Legs are stored exactly as typed. Claude
+reads each one into a separate `parsed` column (player or team, market, direction, line), so
+a bad reading can never destroy what someone meant to bet. The board shows how every leg was
+read, so a misreading gets noticed before kickoff rather than after grading.
+
+**Legs grade themselves as games finish, the way a sportsbook settles.** A whole-number line
+landing exactly is a push; "3+" is inclusive; anytime TDs count rushing, receiving and return
+scores but never a quarterback's passing TDs; pushes and voids drop out of the parlay; one
+miss busts it immediately. A player is only voided when ESPN ruled them out -- one merely
+missing from a box score is left for a person, since that also describes a misread name.
+
+**A leg with no line can't be graded by any API.** "Jordan Love over passing yards" never
+said over what, and ESPN has no player-prop lines to fall back on. The line gets set when the
+payer places the bet, so the payer either records it (and it grades itself) or just marks the
+leg hit or miss. Hand-set results are never touched by the grader.
+
+**The grader never overturns a settled parlay; a person correcting a leg can.** Otherwise one
+misgraded leg on Thursday would leave the parlay stuck at "busted" after every leg cashed.
 
 **Sleeper linking is trust-based.** Sleeper has no OAuth for third-party apps, so ownership
 cannot be proven. A `UNIQUE` on `sleeper_user_id` enforces first-claim-wins, and the claim
@@ -164,7 +180,10 @@ can submit a leg. If the payer hasn't signed up, the round still works and says 
    closes the connection with "connection is insecure". Only `ssl` is translated by the
    SQLAlchemy asyncpg dialect. Drop `channel_binding` entirely.
 2. **Render** — `render.yaml` is a blueprint. Set `DATABASE_URL`, `GOOGLE_CLIENT_ID`,
-   `FRONTEND_ORIGIN`, and `APP_URL`. Migrations run in the build command.
+   `FRONTEND_ORIGIN`, `APP_URL`, and `ANTHROPIC_API_KEY`. Migrations run in the build
+   command. Without the Anthropic key legs are never read, so nothing grades automatically
+   -- the payer can still mark every leg by hand. Check how legs will be read first with
+   `scripts/check_parse.py`.
 3. **Vercel** — deploy `frontend/`. Set `VITE_API_BASE_URL` to the Render URL and
    `VITE_GOOGLE_CLIENT_ID`. Add the Vercel domain to the Google client's authorized origins.
 4. **GitHub Actions** — add repo secrets `API_BASE_URL` and `INTERNAL_TICK_SECRET` (must
@@ -176,8 +195,9 @@ Because the API and web app sit on different hosts, the session cookie is cross-
 ## Roadmap
 
 Built: Google auth, Sleeper linking, league import, loser detection, leg submission and
-live board, email + Discord notifications, round history with result recording.
+live board, email + Discord notifications, round history with result recording, leg reading
+with Claude, automatic hit/miss grading against ESPN box scores, and parlay settlement with
+a busted/cashed announcement.
 
-Next: LLM leg normalization (OpenAI → `parsed`), hit/miss grading against ESPN with
-red/green, player and team icons (Sleeper CDN), per-leg odds via The Odds API, and combined
+Next: player and team icons (Sleeper CDN), per-leg odds via The Odds API, and combined
 parlay odds.

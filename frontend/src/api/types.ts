@@ -1,7 +1,16 @@
 // Mirrors backend/app/schemas.py. Keep the two in sync.
 
 export type RoundStatus = "upcoming" | "open" | "locked";
-export type LegResult = "pending" | "hit" | "miss" | "push" | "void";
+export type LegResult =
+  | "pending"
+  | "hit"
+  | "miss"
+  | "push"
+  | "void"
+  /** No line anywhere: the payer records one, or settles the leg by hand. */
+  | "needs_line"
+  /** Couldn't be matched to a game or a player; a person decides. */
+  | "unresolved";
 export type RoundOutcome = "pending" | "won" | "lost" | "void";
 
 export interface User {
@@ -76,6 +85,13 @@ export interface Leg {
   created_at: string;
   updated_at: string;
   is_you: boolean;
+  /** How the leg was understood, e.g. "Chase Brown (CIN) · anytime TD". */
+  read_as: string | null;
+  /** Why it got its result: "Jordan Love: 247 passing yds, line over 224.5". */
+  grade_detail: string | null;
+  graded_by: "espn" | "manual" | null;
+  payer_line: number | null;
+  needs_line: boolean;
 }
 
 export interface Round {

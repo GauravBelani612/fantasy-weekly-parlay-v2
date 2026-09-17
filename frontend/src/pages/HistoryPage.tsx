@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useLeague, useRecordResult, useRoundHistory } from "../api/hooks";
 import type { Round } from "../api/types";
+import { LegRow } from "../components/Legs";
 import { Avatar, Button, ErrorNote, Panel, Spinner } from "../components/ui";
 
 const OUTCOME_STYLES: Record<string, string> = {
@@ -92,7 +93,15 @@ function ResultForm({ round, leagueId }: { round: Round; leagueId: string }) {
   );
 }
 
-function RoundCard({ round, leagueId }: { round: Round; leagueId: string }) {
+function RoundCard({
+  round,
+  leagueId,
+  canSettle,
+}: {
+  round: Round;
+  leagueId: string;
+  canSettle: boolean;
+}) {
   const canRecord = round.loser?.is_you || round.legs.some((leg) => leg.is_you);
 
   return (
@@ -131,16 +140,25 @@ function RoundCard({ round, leagueId }: { round: Round; leagueId: string }) {
         </p>
       )}
 
-      <ol className="mt-3 space-y-1.5">
-        {round.legs.map((leg, index) => (
-          <li key={leg.id} className="flex gap-2 text-sm">
-            <span className="w-4 shrink-0 text-right text-xs text-slate-600">{index + 1}</span>
-            <span className="text-slate-200">{leg.raw_text}</span>
-            <span className="text-xs text-slate-600">&mdash; {leg.member_name}</span>
-          </li>
-        ))}
-        {round.legs.length === 0 && <li className="text-sm text-slate-500">No legs recorded.</li>}
-      </ol>
+      {round.legs.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">No legs recorded.</p>
+      ) : (
+        // Settling lives here as well as on the board: once Monday night's game ends the
+        // league page moves on to next week, so this is the only place last week's legs
+        // can still be given a line or marked by hand.
+        <ol className="mt-3 space-y-2">
+          {round.legs.map((leg, index) => (
+            <LegRow
+              key={leg.id}
+              leg={leg}
+              index={index}
+              leagueId={leagueId}
+              roundId={round.id}
+              canSettle={canSettle}
+            />
+          ))}
+        </ol>
+      )}
 
       {canRecord && <ResultForm round={round} leagueId={leagueId} />}
     </Panel>
@@ -172,7 +190,12 @@ export function HistoryPage() {
         </Panel>
       ) : (
         rounds.map((round) => (
-          <RoundCard key={round.id} round={round} leagueId={leagueId!} />
+          <RoundCard
+            key={round.id}
+            round={round}
+            leagueId={leagueId!}
+            canSettle={league.data?.your_role === "commissioner" || Boolean(round.loser?.is_you)}
+          />
         ))
       )}
     </div>

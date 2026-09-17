@@ -141,8 +141,34 @@ function useRoundMutation<TVars>(
 }
 
 export function useSubmitLeg(leagueId: string, roundId: string | undefined) {
-  return useRoundMutation<string>(leagueId, (rawText) =>
-    api.put<Round>(`/rounds/${roundId}/legs/me`, { raw_text: rawText }),
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rawText: string) =>
+      api.put<Round>(`/rounds/${roundId}/legs/me`, { raw_text: rawText }),
+    onSuccess: () => {
+      const refresh = () => {
+        qc.invalidateQueries({ queryKey: keys.currentRound(leagueId) });
+        qc.invalidateQueries({ queryKey: keys.rounds(leagueId) });
+      };
+      refresh();
+      // The leg is read in the background just after the response goes out. Look again
+      // shortly, so how it was read shows up while it can still be fixed -- rather than
+      // at the next 30-second poll.
+      window.setTimeout(refresh, 6000);
+    },
+  });
+}
+
+export interface SettleLeg {
+  legId: string;
+  /** Omit to leave the recorded line alone; null clears it. */
+  line?: number | null;
+  result?: "hit" | "miss" | "push" | "void" | "pending";
+}
+
+export function useSettleLeg(leagueId: string, roundId: string) {
+  return useRoundMutation<SettleLeg>(leagueId, ({ legId, ...body }) =>
+    api.patch<Round>(`/rounds/${roundId}/legs/${legId}`, body),
   );
 }
 
