@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "Parlay <onboarding@resend.dev>"
 
+    # Reads free-text legs into something gradeable. Unset means legs are never read, so
+    # nothing grades automatically -- the payer can still mark each leg by hand.
+    anthropic_api_key: str = ""
+    leg_parse_model: str = "claude-opus-5"
+
     sleeper_base_url: str = "https://api.sleeper.app/v1"
     espn_base_url: str = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
     http_timeout_seconds: float = 15.0

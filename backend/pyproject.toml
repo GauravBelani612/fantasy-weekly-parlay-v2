@@ -22,6 +22,8 @@ dependencies = [
     # Ships the IANA timezone database. Without it ZoneInfo("America/New_York") raises on
     # Windows and on slim Linux images, and every deadline silently renders in UTC.
     "tzdata>=2024.2",
+    # Reads free-text legs into something gradeable. 1.x: built on httpx2, needs 3.10+.
+    "anthropic>=1.6",
 ]
 
 [project.optional-dependencies]
