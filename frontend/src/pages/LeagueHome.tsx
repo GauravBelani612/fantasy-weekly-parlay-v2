@@ -312,7 +312,7 @@ export function LeagueHome() {
               {data.status === "locked" ? "Locked " : "Locks in "}
               <Countdown target={data.locks_at} />
               <span className="ml-2 text-slate-600">
-                ({formatDeadline(data.locks_at, league.data.timezone)})
+                ({formatDeadline(data.locks_at)})
               </span>
             </span>
           </div>

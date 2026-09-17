@@ -46,6 +46,7 @@ def leg_out(
         payer_line=leg.payer_line,
         # A leg settled by hand needs no line, whatever its text said.
         needs_line=leg.graded_by != "manual" and grading.needs_line(leg.parsed, leg.payer_line),
+        kickoff_at=leg.kickoff_at,
     )
 
 

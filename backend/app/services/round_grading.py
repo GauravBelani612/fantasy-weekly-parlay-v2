@@ -78,11 +78,12 @@ def apply_grade(leg: Leg, grade: grading.Grade) -> bool:
         grade.detail,
         grade.event_id or leg.espn_event_id,
         "espn" if settled else None,
+        grade.kickoff_at or leg.kickoff_at,
     )
-    old = (leg.result, leg.grade_detail, leg.espn_event_id, leg.graded_by)
+    old = (leg.result, leg.grade_detail, leg.espn_event_id, leg.graded_by, leg.kickoff_at)
     if new == old:
         return False
-    leg.result, leg.grade_detail, leg.espn_event_id, leg.graded_by = new
+    leg.result, leg.grade_detail, leg.espn_event_id, leg.graded_by, leg.kickoff_at = new
     leg.graded_at = _now() if settled else None
     return True
 
@@ -123,9 +124,7 @@ async def grade_round(
 
     for leg in legs:
         if _grader_owns(leg):
-            grade = await grading.grade_leg(
-                leg.parsed, leg.payer_line, schedule, cache.summary, league.timezone
-            )
+            grade = await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
             apply_grade(leg, grade)
 
     await session.commit()
@@ -219,10 +218,7 @@ async def set_leg(
                     leg.raw_text, [e.name for e in schedule.events], rnd.bet_week
                 )
             apply_grade(
-                leg,
-                await grading.grade_leg(
-                    leg.parsed, leg.payer_line, schedule, cache.summary, league.timezone
-                ),
+                leg, await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
             )
             await session.commit()
     except Exception:

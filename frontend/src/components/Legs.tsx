@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useSettleLeg } from "../api/hooks";
 import type { Leg, LegResult, RoundOutcome } from "../api/types";
+import { formatKickoff } from "./Countdown";
 import { Avatar, Button, ErrorNote } from "./ui";
 
 const RESULT_STYLES: Partial<Record<LegResult, [label: string, className: string]>> = {
@@ -164,7 +165,13 @@ export function LegRow({
   // Anything else keeps them behind "Change result", so opening a leg just to see how it
   // was read doesn't also lay out a row of buttons.
   const needsPerson = leg.needs_line || leg.result === "unresolved";
-  const detail = leg.result !== "needs_line" ? leg.grade_detail : null;
+  const graded = leg.result !== "needs_line" ? leg.grade_detail : null;
+  // The kickoff is stored as an instant and formatted here, so "Waiting on CIN @ HOU"
+  // reads in the timezone of whoever is looking rather than the league's.
+  const detail =
+    graded && leg.result === "pending" && leg.kickoff_at
+      ? `${graded} · ${formatKickoff(leg.kickoff_at)}`
+      : graded;
   const expandable = Boolean(leg.read_as || detail || canSettle);
   const detailsId = `leg-${leg.id}-details`;
 

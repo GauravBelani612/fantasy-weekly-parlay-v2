@@ -239,6 +239,10 @@ class Leg(Base):
     payer_line: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Why the leg got its result, in terms a league member can check against the game.
     grade_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Kickoff of the game this leg rides on, so the browser can show it in the reader's
+    # own timezone. Times are deliberately kept out of grade_detail: a formatted time
+    # baked into a stored sentence can never adapt to who is reading it.
+    kickoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # "espn" when graded from the box score, "manual" when the payer or commissioner set
     # it. The grader never touches a manual result.
     graded_by: Mapped[str | None] = mapped_column(String(16), nullable=True)

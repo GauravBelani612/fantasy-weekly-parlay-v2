@@ -28,7 +28,8 @@ export function useCountdown(target: string) {
   return { remaining, expired: remaining <= 0, text: format(remaining) };
 }
 
-export function formatDeadline(iso: string, timeZone?: string): string {
+/** An absolute time, in the reader's own timezone: "Sat, Sep 20, 1:00 PM EDT". */
+export function formatDeadline(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     weekday: "short",
     month: "short",
@@ -36,7 +37,15 @@ export function formatDeadline(iso: string, timeZone?: string): string {
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
-    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+/** Shorter, for a kickoff inside a sentence: "Sun 1:00 PM". The week is implied. */
+export function formatKickoff(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 

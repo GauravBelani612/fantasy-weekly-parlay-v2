@@ -91,6 +91,8 @@ export interface Leg {
   graded_by: "espn" | "manual" | null;
   payer_line: number | null;
   needs_line: boolean;
+  /** Kickoff of the game this leg is waiting on, if it is still waiting on one. */
+  kickoff_at: string | null;
 }
 
 export interface Round {

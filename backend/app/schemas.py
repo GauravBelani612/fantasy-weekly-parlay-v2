@@ -116,6 +116,9 @@ class LegOut(BaseModel):
     payer_line: float | None = None
     # No line anywhere yet: the payer should record one, or settle the leg by hand.
     needs_line: bool = False
+    # Kickoff of the game this leg is waiting on, rendered in the reader's own timezone
+    # by the browser.
+    kickoff_at: datetime | None = None
 
 
 class LegSettleIn(BaseModel):
