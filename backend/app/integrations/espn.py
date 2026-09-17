@@ -6,6 +6,7 @@ continuously, so without a finality signal we would happily crown a "loser" half
 Sunday afternoon.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -164,6 +165,39 @@ async def get_week_schedule(season: str, week: int) -> WeekSchedule:
             log.warning("Skipping malformed ESPN event in %s wk%s: %s", season, week, exc)
 
     return WeekSchedule(season=season, week=week, events=events)
+
+
+async def _team_roster(abbr: str) -> list[tuple[str, str]]:
+    data = await get_json(f"{settings.espn_base_url}/teams/{abbr}/roster")
+    return [
+        (athlete["fullName"], abbr)
+        for group in (data or {}).get("athletes", [])
+        for athlete in group.get("items", [])
+        if athlete.get("fullName")
+    ]
+
+
+async def get_rosters() -> list[tuple[str, str]]:
+    """(player, team) for everyone on an active NFL roster.
+
+    The leg parser cannot know this. A model's roster knowledge is frozen at its training
+    cutoff, so a rookie or anyone traded since gets a confidently wrong team -- and a
+    wrong team that happens to be playing is worse than none at all.
+
+    Thirty-two requests, run together, come back in well under a second. One team failing
+    is logged and skipped rather than costing us the other thirty-one: a partial index
+    only means a few legs keep whatever the model guessed.
+    """
+    results = await asyncio.gather(
+        *(_team_roster(abbr) for abbr in TEAM_ABBREVIATIONS), return_exceptions=True
+    )
+    pairs: list[tuple[str, str]] = []
+    for abbr, result in zip(TEAM_ABBREVIATIONS, results, strict=True):
+        if isinstance(result, BaseException):
+            log.warning("Roster fetch failed for %s: %s", abbr, result)
+        else:
+            pairs.extend(result)
+    return pairs
 
 
 async def get_game_summary(event_id: str) -> GameSummary | None:

@@ -41,7 +41,9 @@ class FakeEspn:
             "gb": [PlayerLine("Jordan Love", "GB", {"passing_yards": 247})],
         }
         self.teams = {"cin": ("CIN", "JAX"), "phi": ("PHI", "KC"), "gb": ("GB", "WSH")}
+        self.roster = [("Chase Brown", "CIN"), ("Saquon Barkley", "PHI"), ("Jordan Love", "GB")]
         self.summary_calls = 0
+        self.roster_calls = 0
 
     async def schedule(self, season: str, week: int) -> WeekSchedule:
         events = [
@@ -50,6 +52,10 @@ class FakeEspn:
             for eid, t in self.teams.items()
         ]
         return WeekSchedule(season=season, week=week, events=events)
+
+    async def rosters(self) -> list[tuple[str, str]]:
+        self.roster_calls += 1
+        return self.roster
 
     async def summary(self, event_id: str) -> GameSummary:
         self.summary_calls += 1
@@ -63,6 +69,7 @@ def fake_espn(monkeypatch):
     fake = FakeEspn()
     monkeypatch.setattr(espn, "get_week_schedule", fake.schedule)
     monkeypatch.setattr(espn, "get_game_summary", fake.summary)
+    monkeypatch.setattr(espn, "get_rosters", fake.rosters)
     return fake
 
 
@@ -136,6 +143,32 @@ async def _refresh(session, *objs):
 
 
 # ------------------------------------------------------------------ reading and grading
+
+
+async def test_a_wrong_team_from_the_model_is_corrected_from_the_roster(
+    session, live, fake_espn, parser_calls, outbox
+):
+    """The Carnell Tate case: a player the model put on a team he does not play for.
+
+    A wrong team that happens to be playing is the dangerous one. _grade_player looks
+    only in that game and never widens, so without the roster this leg would sit pending
+    on the wrong kickoff and then die unresolved.
+    """
+    fake_espn.final.add("cin")
+    brown = live["legs"]["brown"]
+    brown.parsed = {**READINGS["Chase Brown TD"], "team": "PHI"}
+    await session.commit()
+
+    await _grade(session, live)
+    await _refresh(session, brown)
+
+    assert brown.parsed["team"] == "CIN"
+    assert brown.result == grading.HIT
+
+
+async def test_the_roster_is_fetched_once_a_pass(session, live, fake_espn, parser_calls, outbox):
+    await _grade(session, live)
+    assert fake_espn.roster_calls == 1
 
 
 async def test_unread_legs_are_read_once(session, live, fake_espn, parser_calls, outbox):

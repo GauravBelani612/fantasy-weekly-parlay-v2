@@ -21,7 +21,7 @@ Every leg is a hit or a miss, and the only way a leg drops out is its player not
 import difflib
 import re
 import unicodedata
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -114,6 +114,50 @@ def name_key(name: str) -> str:
     text = re.sub(r"[-_]", " ", text.lower())
     text = re.sub(r"[^a-z\s]", "", text)
     return " ".join(p for p in text.split() if p not in _SUFFIXES)
+
+
+@dataclass(frozen=True)
+class RosterIndex:
+    """Who is on which team right now, from ESPN rather than from model memory."""
+
+    teams_by_name: dict[str, tuple[str, ...]]
+
+    def team_for(self, name: str) -> str | None:
+        """This player's team, or None if unknown or shared with a namesake."""
+        teams = self.teams_by_name.get(name_key(name), ())
+        return teams[0] if len(teams) == 1 else None
+
+
+def roster_index(pairs: Iterable[tuple[str, str]]) -> RosterIndex:
+    teams: dict[str, list[str]] = {}
+    for name, team in pairs:
+        key = name_key(name)
+        if not key:
+            continue
+        on = teams.setdefault(key, [])
+        if team not in on:
+            on.append(team)
+    return RosterIndex({key: tuple(on) for key, on in teams.items()})
+
+
+def names_a_player(parsed: dict | None) -> bool:
+    return bool(parsed) and parsed.get("market") in PLAYER_MARKETS and bool(parsed.get("subject"))
+
+
+def with_real_team(parsed: dict | None, rosters: RosterIndex) -> dict | None:
+    """Correct a player leg's team from the roster, since the model is guessing at it.
+
+    Only an unambiguous roster hit overrides. Two players sharing a name is the one case
+    where the model's guess is the better tiebreak, and an unknown name is left alone
+    rather than blanked -- a typo should not cost a leg the team it did get right.
+    """
+    if not names_a_player(parsed):
+        return parsed
+    assert parsed is not None
+    team = rosters.team_for(parsed["subject"])
+    if team is None or team == parsed.get("team"):
+        return parsed
+    return {**parsed, "team": team}
 
 
 @dataclass(frozen=True)

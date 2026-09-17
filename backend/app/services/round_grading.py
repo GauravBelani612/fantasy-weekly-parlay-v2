@@ -40,6 +40,7 @@ class _WeekCache:
     def __init__(self) -> None:
         self._schedules: dict[tuple[str, int], espn.WeekSchedule] = {}
         self._summaries: dict[str, espn.GameSummary | None] = {}
+        self._rosters: grading.RosterIndex | None = None
 
     async def schedule(self, season: str, week: int) -> espn.WeekSchedule:
         key = (season, week)
@@ -51,6 +52,11 @@ class _WeekCache:
         if event_id not in self._summaries:
             self._summaries[event_id] = await espn.get_game_summary(event_id)
         return self._summaries[event_id]
+
+    async def rosters(self) -> grading.RosterIndex:
+        if self._rosters is None:
+            self._rosters = grading.roster_index(await espn.get_rosters())
+        return self._rosters
 
 
 def _now() -> datetime:
@@ -122,10 +128,21 @@ async def grade_round(
     for leg, reading in zip(unread, readings, strict=True):
         leg.parsed = reading
 
-    for leg in legs:
-        if _grader_owns(leg):
-            grade = await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
-            apply_grade(leg, grade)
+    # Whose team the model guessed at, corrected from the roster before that team is
+    # used to pick a game. Fetched only when a player leg actually needs it, and only
+    # once per pass however many legs that is.
+    mine = [leg for leg in legs if _grader_owns(leg)]
+    if any(grading.names_a_player(leg.parsed) for leg in mine):
+        rosters = await cache.rosters()
+        for leg in mine:
+            corrected = grading.with_real_team(leg.parsed, rosters)
+            if corrected != leg.parsed:
+                log.info("Leg %s: team corrected to %s", leg.id, corrected["team"])
+                leg.parsed = corrected
+
+    for leg in mine:
+        grade = await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
+        apply_grade(leg, grade)
 
     await session.commit()
     return await settle(session, league, rnd, app_url, follow_legs=False)

@@ -347,3 +347,50 @@ def test_read_as():
 )
 def test_name_key_lines_up_the_ways_people_type_names(typed, espn):
     assert g.name_key(typed) == g.name_key(espn)
+
+
+# ------------------------------------------------------------- whose team is it anyway
+
+# Deliberately includes two Josh Allens, as the real league does.
+ROSTER = g.roster_index(
+    [
+        ("Carnell Tate", "TEN"),
+        ("Chase Brown", "CIN"),
+        ("Ja'Marr Chase", "CIN"),
+        ("Josh Allen", "BUF"),
+        ("Josh Allen", "JAX"),
+    ]
+)
+
+
+def test_the_roster_overrules_the_model():
+    """The live board's Carnell Tate leg: a 2026 rookie the model put on the Rams."""
+    assert g.with_real_team(anytime_td("Carnell Tate", "LAR"), ROSTER)["team"] == "TEN"
+
+
+def test_the_roster_fills_in_a_team_the_model_left_out():
+    assert g.with_real_team(anytime_td("Chase Brown", None), ROSTER)["team"] == "CIN"
+
+
+def test_a_name_is_matched_however_it_was_typed():
+    assert g.with_real_team(anytime_td("jamarr chase", "KC"), ROSTER)["team"] == "CIN"
+
+
+def test_a_shared_name_keeps_the_models_guess():
+    """Two Josh Allens: the model's reading of the bet is the better tiebreak."""
+    assert g.with_real_team(anytime_td("Josh Allen", "BUF"), ROSTER)["team"] == "BUF"
+
+
+def test_a_player_nobody_has_heard_of_is_left_alone():
+    """A typo should not cost a leg the team the model did get right."""
+    assert g.with_real_team(anytime_td("Chse Brwn", "CIN"), ROSTER)["team"] == "CIN"
+
+
+def test_a_team_bet_is_never_touched():
+    """KC's moneyline is about KC, not about whoever plays for them."""
+    parsed = leg(market="moneyline", team="KC")
+    assert g.with_real_team(parsed, ROSTER) is parsed
+
+
+def test_an_unread_leg_is_never_touched():
+    assert g.with_real_team(None, ROSTER) is None
