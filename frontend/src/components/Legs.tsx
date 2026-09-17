@@ -53,14 +53,21 @@ function SettleControls({
   leagueId,
   roundId,
   onDone,
+  editingLine = false,
 }: {
   leg: Leg;
   leagueId: string;
   roundId: string;
   onDone: () => void;
+  /** Opened via "Edit line": show the input even though a line is already recorded. */
+  editingLine?: boolean;
 }) {
   const settle = useSettleLeg(leagueId, roundId);
   const [line, setLine] = useState(leg.payer_line?.toString() ?? "");
+  // A recorded line is the one thing on a leg the payer typed themselves, so it is the
+  // one thing they can mistype. Saving it flips needs_line false and takes the input
+  // away, so it can also be asked for again.
+  const [showLine, setShowLine] = useState(leg.needs_line || editingLine);
   const parsedLine = Number(line);
   const lineValid = line.trim() !== "" && Number.isFinite(parsedLine);
 
@@ -78,6 +85,14 @@ function SettleControls({
           No line was written down. Enter the line you placed and this grades itself when the
           game ends &mdash; or just mark how it went.
         </p>
+      ) : showLine ? (
+        // set_leg keeps a hand-set result when a new line comes in, on purpose: a person
+        // saying how it went outranks the box score. So don't promise a regrade there.
+        <p className="text-xs text-slate-400">
+          {leg.graded_by === "manual"
+            ? "This leg was settled by hand, so a new line just corrects the record. Use “Back to automatic” to have it graded again."
+            : "This is graded against the line you recorded. Save a different one and it grades itself again from the box score."}
+        </p>
       ) : leg.result === "unresolved" ? (
         <p className="text-xs text-slate-400">
           This couldn&apos;t be settled automatically. Mark how it went &mdash; void only if the
@@ -86,7 +101,7 @@ function SettleControls({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        {leg.needs_line && (
+        {showLine && (
           <form
             className="flex items-center gap-2"
             onSubmit={(event) => {
@@ -125,6 +140,16 @@ function SettleControls({
           </button>
         ))}
 
+        {!showLine && leg.payer_line !== null && (
+          <button
+            type="button"
+            onClick={() => setShowLine(true)}
+            className="rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:border-slate-400 hover:text-slate-200"
+          >
+            Edit line
+          </button>
+        )}
+
         {leg.graded_by === "manual" && (
           <button
             type="button"
@@ -160,6 +185,7 @@ export function LegRow({
   // How it was read and why it got its result are one click away.
   const [expanded, setExpanded] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [editingLine, setEditingLine] = useState(false);
 
   // A leg that can't settle without a person shows its controls as soon as it opens.
   // Anything else keeps them behind "Change result", so opening a leg just to see how it
@@ -179,6 +205,7 @@ export function LegRow({
     if (!expandable) return;
     setExpanded((value) => !value);
     setChanging(false);
+    setEditingLine(false);
   };
 
   const tone =
@@ -252,24 +279,37 @@ export function LegRow({
           {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
 
           {canSettle &&
-            (needsPerson || changing ? (
+            (needsPerson || changing || editingLine ? (
               <SettleControls
                 leg={leg}
                 leagueId={leagueId}
                 roundId={roundId}
+                editingLine={editingLine}
                 onDone={() => {
                   setChanging(false);
+                  setEditingLine(false);
                   setExpanded(false);
                 }}
               />
             ) : (
-              <button
-                type="button"
-                onClick={() => setChanging(true)}
-                className="mt-2.5 rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-400 hover:text-white"
-              >
-                {leg.result === "pending" ? "Settle by hand" : "Change result"}
-              </button>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChanging(true)}
+                  className="rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-400 hover:text-white"
+                >
+                  {leg.result === "pending" ? "Settle by hand" : "Change result"}
+                </button>
+                {leg.payer_line !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingLine(true)}
+                    className="rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-400 hover:text-white"
+                  >
+                    Edit line
+                  </button>
+                )}
+              </div>
             ))}
         </div>
       )}
