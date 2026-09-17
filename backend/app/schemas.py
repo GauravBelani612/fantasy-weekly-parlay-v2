@@ -172,3 +172,75 @@ class RoundResultIn(BaseModel):
 
 class SetLoserIn(BaseModel):
     member_id: uuid.UUID
+
+
+# ---------------------------------------------------------------- stats
+
+
+class StreakOut(BaseModel):
+    result: Literal["hit", "miss"]
+    length: int
+
+
+class BetTypeOut(BaseModel):
+    label: str
+    hits: int
+    misses: int
+    hit_rate: float | None = None
+
+
+class BestWeekOut(BaseModel):
+    bet_week: int
+    hits: int
+    legs: int
+
+
+class PayerOut(BaseModel):
+    member_id: uuid.UUID
+    display_name: str
+    times: int
+
+
+class LeagueTotalsOut(BaseModel):
+    # Weeks locked with every leg settled; the per-week averages are over these only.
+    weeks_complete: int
+    legs_hit: int
+    legs_missed: int
+    hit_rate: float | None = None
+    avg_hits_per_week: float | None = None
+    avg_legs_per_week: float | None = None
+    best_week: BestWeekOut | None = None
+    parlays_won: int
+    parlays_lost: int
+    cash_rate: float | None = None
+    # Lost parlays where exactly one leg missed.
+    one_leg_away: int
+    by_bet_type: list[BetTypeOut] = []
+    # Everyone tied for funding the most parlays.
+    top_payers: list[PayerOut] = []
+
+
+class MemberStatsOut(BaseModel):
+    member_id: uuid.UUID
+    display_name: str
+    avatar_url: str | None = None
+    is_you: bool = False
+    hits: int
+    misses: int
+    voids: int
+    hit_rate: float | None = None
+    current_streak: StreakOut | None = None
+    longest_hit_streak: int
+    parlays_played: int
+    parlays_won: int
+    times_funded: int
+    # Finished weeks where this member's leg was the only miss.
+    only_miss: int
+    best_bet_type: BetTypeOut | None = None
+
+
+class LeagueStatsOut(BaseModel):
+    season: str
+    league: LeagueTotalsOut
+    # Leaderboard order: most hits, then hit rate.
+    members: list[MemberStatsOut]

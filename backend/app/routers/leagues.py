@@ -1,12 +1,22 @@
+import dataclasses
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.auth.session import CurrentUser, DbSession
 from app.deps import LeagueCtx
+from app.integrations.sleeper import avatar_url
 from app.models import LeagueMember, SleeperLink
-from app.schemas import ImportLeagueIn, LeagueDetailOut, LeagueOut, LeagueSettingsIn
+from app.schemas import (
+    ImportLeagueIn,
+    LeagueDetailOut,
+    LeagueOut,
+    LeagueSettingsIn,
+    LeagueStatsOut,
+)
 from app.serializers import league_detail_out, league_out
 from app.services import leagues as leagues_service
+from app.services import stats as stats_service
 
 router = APIRouter(prefix="/leagues", tags=["leagues"])
 
@@ -56,6 +66,13 @@ async def get_league(ctx: LeagueCtx, user: CurrentUser, session: DbSession):
         ).all()
     )
     return league_detail_out(ctx.league, members, user)
+
+
+@router.get("/{league_id}/stats", response_model=LeagueStatsOut)
+async def get_league_stats(ctx: LeagueCtx, user: CurrentUser, session: DbSession):
+    """League and personal stats for the season, recomputed from stored results."""
+    stats = await stats_service.league_stats(session, ctx.league, user.id, avatar_url)
+    return LeagueStatsOut.model_validate(dataclasses.asdict(stats))
 
 
 @router.post("/{league_id}/sync", response_model=LeagueDetailOut)
