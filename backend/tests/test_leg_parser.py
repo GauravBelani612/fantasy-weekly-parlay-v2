@@ -74,7 +74,24 @@ async def test_returns_the_structured_reading(client):
     assert result["subject"] == "Chase Brown"
     assert result["team"] == "CIN"
     assert result["market"] == "touchdowns"
+    assert result["prompt_version"] == leg_parser.PROMPT_VERSION
     assert len(fake.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("parsed", "expected"),
+    [
+        (None, True),
+        ({"understood": True}, False),  # a good reading is never re-read
+        ({"understood": True, "prompt_version": 1}, False),
+        ({"understood": False}, True),  # unreadable before versioning existed
+        ({"understood": False, "prompt_version": 1}, True),
+        # Unreadable under the current prompt: trying again would just spend money.
+        ({"understood": False, "prompt_version": leg_parser.PROMPT_VERSION}, False),
+    ],
+)
+def test_needs_reading(parsed, expected):
+    assert leg_parser.needs_reading(parsed) is expected
 
 
 async def test_sends_the_request_it_should(client):

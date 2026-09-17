@@ -144,6 +144,26 @@ async def test_unread_legs_are_read_once(session, live, fake_espn, parser_calls,
     assert sorted(parser_calls) == sorted(READINGS), "each leg read exactly once"
 
 
+async def test_a_leg_misread_by_an_older_prompt_gets_one_more_read(
+    session, live, fake_espn, parser_calls, outbox
+):
+    """The live board's Chuba Hubbard leg: read correctly but marked not understood."""
+    love = live["legs"]["love"]
+    love.parsed = {"understood": False, "market": "passing_yards", "subject": "Jordan Love",
+                   "team": "GB", "direction": "over", "line": None, "note": "no line"}
+    love.result = grading.UNRESOLVED
+    await session.commit()
+
+    await _grade(session, live)
+    await _refresh(session, love)
+    assert "Jordan love over passing yards" in parser_calls
+    assert love.result == grading.NEEDS_LINE
+
+    parser_calls.clear()
+    await _grade(session, live)
+    assert parser_calls == [], "a good reading is not re-read on the next tick"
+
+
 async def test_before_kickoff_the_payer_is_asked_for_the_missing_line(
     session, live, fake_espn, parser_calls, outbox
 ):

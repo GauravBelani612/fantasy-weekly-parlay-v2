@@ -114,7 +114,7 @@ async def grade_round(
 
     # Read concurrently: a fresh round can have a dozen unread legs, and doing them one at
     # a time would hold the tick open for most of a minute. parse_leg never raises.
-    unread = [leg for leg in legs if leg.parsed is None]
+    unread = [leg for leg in legs if leg_parser.needs_reading(leg.parsed)]
     readings = await asyncio.gather(
         *(leg_parser.parse_leg(leg.raw_text, matchups, rnd.bet_week) for leg in unread)
     )
@@ -212,7 +212,7 @@ async def set_leg(
         cache = _WeekCache()
         schedule = await cache.schedule(rnd.season, rnd.bet_week)
         if _grader_owns(leg):
-            if leg.parsed is None:
+            if leg_parser.needs_reading(leg.parsed):
                 leg.parsed = await leg_parser.parse_leg(
                     leg.raw_text, [e.name for e in schedule.events], rnd.bet_week
                 )
