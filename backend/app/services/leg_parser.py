@@ -22,10 +22,6 @@ from app.integrations.espn import TEAM_ABBREVIATIONS
 
 log = logging.getLogger(__name__)
 
-# Server-side refusal fallback: if the request is declined, the API re-runs it on another
-# model inside the same call rather than returning an empty refusal.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-
 Team = Literal[TEAM_ABBREVIATIONS]  # type: ignore[valid-type]
 Market = Literal[
     "touchdowns",
@@ -150,14 +146,14 @@ async def parse_leg(
 
     try:
         client = _get_client().with_options(timeout=timeout, max_retries=max_retries)
-        response = await client.beta.messages.parse(
+        # Only parameters every current model accepts, so LEG_PARSE_MODEL can be changed
+        # freely. In particular: no `effort` (Haiku 4.5 rejects it), and no server-side
+        # refusal fallback (built for Opus 5 / Fable 5.1 refusals). max_tokens stays at the
+        # usual default rather than the ~200 a reading needs: billing is on tokens actually
+        # used, and a model that thinks by default would be cut off mid-thought by a tight cap.
+        response = await client.messages.parse(
             model=settings.leg_parse_model,
             max_tokens=16000,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-            # Extraction is short and routine; low effort keeps it quick without
-            # turning thinking off, which carries its own failure modes on this model.
-            output_config={"effort": "low"},
             output_format=ParsedLeg,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": _user_message(raw_text, matchups or [], week)}],
@@ -187,7 +183,6 @@ async def parse_leg(
         return None
 
     if response.stop_reason == "refusal":
-        # With fallbacks enabled this means every model in the chain declined.
         log.warning("Leg parsing refused (%s): %r", response.stop_details, raw_text)
         return None
     if response.stop_reason == "max_tokens":

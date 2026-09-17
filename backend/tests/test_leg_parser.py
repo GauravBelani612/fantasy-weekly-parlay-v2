@@ -1,8 +1,8 @@
 """The parser is best-effort: it must never raise, and never block a submission.
 
-These run against a fake client. They pin down the request actually sent -- model,
-refusal fallback, structured schema, effort -- and that every way the call can fail
-leaves the leg unread for the next tick rather than propagating.
+These run against a fake client. They pin down the request actually sent -- the model,
+the structured schema, and the parameters deliberately left out -- and that every way the
+call can fail leaves the leg unread for the next tick rather than propagating.
 """
 
 import anthropic
@@ -31,7 +31,7 @@ class FakeResponse:
 
 
 class FakeClient:
-    """Stands in for AsyncAnthropic: .with_options(...).beta.messages.parse(...)."""
+    """Stands in for AsyncAnthropic: .with_options(...).messages.parse(...)."""
 
     def __init__(self, result=None, error: Exception | None = None):
         self.calls: list[dict] = []
@@ -82,11 +82,14 @@ async def test_sends_the_request_it_should(client):
     await leg_parser.parse_leg("Giants money line", ["NYG @ DAL"], week=2)
     sent = fake.calls[0]
 
-    assert sent["model"] == "claude-opus-5"
-    assert sent["fallbacks"] == "default"
-    assert leg_parser.FALLBACK_BETA in sent["betas"]
+    assert sent["model"] == "claude-haiku-4-5"
     assert sent["output_format"] is ParsedLeg
-    assert sent["output_config"] == {"effort": "low"}
+    # None of these works the same way on every current model: Haiku 4.5 rejects `effort`,
+    # a `thinking` config valid on one model is rejected on another, and the refusal
+    # fallback exists for Opus 5 / Fable 5.1. Tests can't reach the live API, so leaving all
+    # of them out is what keeps the model swappable without a 400 appearing in production.
+    for rejected in ("output_config", "thinking", "betas", "fallbacks"):
+        assert rejected not in sent, f"{rejected} is not accepted by every model"
     content = sent["messages"][0]["content"]
     # The typed text is fenced as data, and this week's games give it context.
     assert "<leg>\nGiants money line\n</leg>" in content

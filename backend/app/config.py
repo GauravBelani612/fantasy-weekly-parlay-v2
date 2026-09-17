@@ -34,7 +34,10 @@ class Settings(BaseSettings):
     # Reads free-text legs into something gradeable. Unset means legs are never read, so
     # nothing grades automatically -- the payer can still mark each leg by hand.
     anthropic_api_key: str = ""
-    leg_parse_model: str = "claude-opus-5"
+    # The cheapest current model. Reading a leg is short, schema-constrained extraction,
+    # which it handles without thinking. Any current model can be swapped in here: the
+    # request deliberately avoids parameters only some models accept.
+    leg_parse_model: str = "claude-haiku-4-5"
 
     sleeper_base_url: str = "https://api.sleeper.app/v1"
     espn_base_url: str = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
