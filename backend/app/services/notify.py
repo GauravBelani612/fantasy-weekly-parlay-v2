@@ -326,7 +326,7 @@ async def notify_round(
 KIND_RESOLVED = "resolved"
 
 _RESOLVED_WORD = {"won": "cashed", "lost": "busted", "void": "voided"}
-_DISCORD_MARK = {"hit": "✅", "miss": "❌", "push": "➖", "void": "➖"}
+_DISCORD_MARK = {"hit": "✅", "miss": "❌", "void": "➖"}
 
 
 def resolution_kind(outcome: str) -> str:
@@ -405,7 +405,7 @@ def _discord_resolution(
     elif rnd.outcome == "won":
         headline = f"**Week {week} parlay cashed!** Every leg came in. Funded by {loser_name}."
     else:
-        headline = f"**Week {week} parlay voided** - every leg pushed or was voided."
+        headline = f"**Week {week} parlay voided** - every leg was voided."
     lines = "\n".join(
         f"{_DISCORD_MARK.get(result, '⏳')} {text} - {who}" for text, who, result, _ in rows
     )

@@ -4,10 +4,13 @@ No database access here. Box scores arrive through an injected loader, so every 
 be exercised against a handmade game and any disputed result reproduced exactly. That
 matters more than usual: this is the code a league argues with.
 
-The rules follow how sportsbooks settle, since that is what the payer actually placed:
+The rules follow how sportsbooks settle, with one league rule on top: there are no pushes.
+Every leg is a hit or a miss, and the only way a leg drops out is its player not playing.
 
-- An over or under that lands exactly on a whole-number line is a push, not a loss.
 - "N+" is inclusive: three receptions settles "3+ receptions" as a hit.
+- Over and under are strict. "Over 70" landing on exactly 70 did not go over, so it is a
+  miss -- not the push a sportsbook would call it. The same goes for a spread covered by
+  exactly the number and a moneyline that ends tied.
 - Anytime touchdowns count rushing, receiving and return scores -- never a quarterback's
   passing touchdowns.
 - A player who did not play voids the leg rather than losing it, but only when ESPN
@@ -26,14 +29,13 @@ from app.integrations.espn import GameSummary, PlayerLine, WeekSchedule
 PENDING = "pending"
 HIT = "hit"
 MISS = "miss"
-PUSH = "push"
 VOID = "void"
 NEEDS_LINE = "needs_line"
 UNRESOLVED = "unresolved"
 
-TERMINAL = frozenset({HIT, MISS, PUSH, VOID})
+TERMINAL = frozenset({HIT, MISS, VOID})
 # What the payer or commissioner may set by hand. PENDING hands the leg back to the grader.
-MANUAL_RESULTS = frozenset({HIT, MISS, PUSH, VOID, PENDING})
+MANUAL_RESULTS = frozenset({HIT, MISS, VOID, PENDING})
 
 # Market -> the box-score stats that sum to it.
 PLAYER_MARKETS: dict[str, tuple[str, ...]] = {
@@ -167,10 +169,11 @@ def _ruled_out(summary: GameSummary, name: str) -> str | None:
 def _compare(value: float, direction: str | None, line: float) -> str | None:
     if direction == "at_least":
         return HIT if value >= line else MISS
+    # Strict, by league rule: exactly on the line is not over and not under.
     if direction == "over":
-        return HIT if value > line else PUSH if value == line else MISS
+        return HIT if value > line else MISS
     if direction == "under":
-        return HIT if value < line else PUSH if value == line else MISS
+        return HIT if value < line else MISS
     return None
 
 
@@ -226,8 +229,8 @@ def read_as(parsed: dict | None, payer_line: float | None = None) -> str | None:
 def resolve_outcome(results: list[str]) -> str:
     """Settle the parlay from its legs, the way a sportsbook would.
 
-    One miss loses it immediately, even with games still to play. Pushes and voids drop
-    out of the parlay rather than sinking it; if every leg dropped out, it is void.
+    One miss loses it immediately, even with games still to play. A voided leg -- a player
+    who didn't play -- drops out rather than sinking it; if every leg dropped out, it is void.
     """
     if not results:
         return PENDING
@@ -235,7 +238,7 @@ def resolve_outcome(results: list[str]) -> str:
         return "lost"
     if any(r not in TERMINAL for r in results):
         return PENDING
-    if all(r in (PUSH, VOID) for r in results):
+    if all(r == VOID for r in results):
         return "void"
     return "won"
 
@@ -279,12 +282,14 @@ async def _grade_team(
     score = f"{team} {ours}, {opponent} {theirs}"
 
     if market == "moneyline":
-        result = HIT if ours > theirs else PUSH if ours == theirs else MISS
+        # A tie did not win.
+        result = HIT if ours > theirs else MISS
         return Grade(result, score, event.event_id)
 
     if market == "spread":
         margin = ours + line - theirs
-        result = HIT if margin > 0 else PUSH if margin == 0 else MISS
+        # Covering by exactly the number is not covering.
+        result = HIT if margin > 0 else MISS
         return Grade(result, f"{score}, {team} {line:+g}", event.event_id)
 
     direction = parsed.get("direction")

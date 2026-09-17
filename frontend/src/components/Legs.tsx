@@ -7,7 +7,6 @@ import { Avatar, Button, ErrorNote } from "./ui";
 const RESULT_STYLES: Partial<Record<LegResult, [label: string, className: string]>> = {
   hit: ["Hit", "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"],
   miss: ["Miss", "border-red-500/40 bg-red-500/15 text-red-300"],
-  push: ["Push", "border-slate-500/40 bg-slate-500/15 text-slate-300"],
   void: ["Void", "border-slate-500/40 bg-slate-500/15 text-slate-300"],
   needs_line: ["Needs line", "border-amber-500/40 bg-amber-500/10 text-amber-200"],
   unresolved: ["Check", "border-amber-500/40 bg-amber-500/10 text-amber-200"],
@@ -42,10 +41,9 @@ export function OutcomePill({ outcome }: { outcome: RoundOutcome }) {
   );
 }
 
-const MANUAL: { result: "hit" | "miss" | "push" | "void"; label: string; className: string }[] = [
+const MANUAL: { result: "hit" | "miss" | "void"; label: string; className: string }[] = [
   { result: "hit", label: "Hit", className: "hover:border-emerald-500/60 hover:text-emerald-300" },
   { result: "miss", label: "Miss", className: "hover:border-red-500/60 hover:text-red-300" },
-  { result: "push", label: "Push", className: "hover:border-slate-400 hover:text-slate-200" },
   { result: "void", label: "Void", className: "hover:border-slate-400 hover:text-slate-200" },
 ];
 
@@ -81,7 +79,8 @@ function SettleControls({
         </p>
       ) : leg.result === "unresolved" ? (
         <p className="text-xs text-slate-400">
-          This couldn&apos;t be settled automatically. Mark how it went.
+          This couldn&apos;t be settled automatically. Mark how it went &mdash; void only if the
+          player didn&apos;t play.
         </p>
       ) : null}
 

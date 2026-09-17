@@ -338,12 +338,11 @@ def legs_ready(
 
 # ---------------------------------------------------------------- settling the parlay
 
-# Result -> (label, text colour, background). Pushes and voids share a neutral chip: at a
+# Result -> (label, text colour, background). Void is neutral: the leg's player didn't
 # sportsbook both simply drop out of the parlay.
 _RESULT_CHIPS = {
     "hit": ("HIT", "#00794a", "#e3f5eb"),
     "miss": ("MISS", "#b42318", "#fdeceb"),
-    "push": ("PUSH", "#5d6b79", "#eef1f4"),
     "void": ("VOID", "#5d6b79", "#eef1f4"),
 }
 
@@ -394,7 +393,7 @@ def parlay_resolved(
     """The parlay has settled. Sent to the whole league: everyone put a leg in."""
     count = len(legs)
     hits = sum(1 for _, _, result, _ in legs if result == "hit")
-    dropped = sum(1 for _, _, result, _ in legs if result in ("push", "void"))
+    dropped = sum(1 for _, _, result, _ in legs if result == "void")
 
     if outcome == "lost":
         misses = [leg for leg in legs if leg[2] == "miss"]
@@ -411,14 +410,14 @@ def parlay_resolved(
         pre = f"Busted by {who}'s {text}."
     elif outcome == "won":
         heading = f"Week {bet_week} parlay cashed"
-        note = f"{dropped} pushed or voided and dropped out" if dropped else "Clean sweep"
+        note = f"{dropped} voided and dropped out" if dropped else "Clean sweep"
         lead = _callout("Every leg came in", f"{hits} of {hits} hit", note)
         intro = _p(f"{escape(loser_name)} funded it, and it paid.")
         pre = f"All {hits} legs hit. Week {bet_week} cashed."
     else:
         heading = f"Week {bet_week} parlay voided"
         lead = ""
-        intro = _p("Every leg pushed or was voided, so there was no parlay left to settle.")
+        intro = _p("Every leg was voided, so there was no parlay left to settle.")
         pre = f"Week {bet_week} parlay voided."
 
     body = intro + lead + graded_leg_list(legs) + _button("Open the board", url)

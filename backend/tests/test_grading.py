@@ -142,9 +142,10 @@ async def test_a_misspelled_name_still_matches():
 
 @pytest.mark.parametrize(
     ("yards", "expected"),
-    [(71, g.HIT), (70, g.PUSH), (69, g.MISS)],
+    [(71, g.HIT), (70, g.MISS), (69, g.MISS)],
 )
-async def test_a_whole_number_line_can_push(yards, expected):
+async def test_landing_exactly_on_an_over_line_is_a_miss(yards, expected):
+    """No pushes, by league rule: exactly 70 did not go over 70."""
     sched = week(event("1", "CAR", "NO"))
     box = game("1", {"CAR": 13, "NO": 16}, [player("Chuba Hubbard", "CAR", rushing_yards=yards)])
     parsed = leg(market="rushing_yards", subject="Chuba Hubbard", team="CAR",
@@ -180,7 +181,7 @@ async def test_a_return_touchdown_is_an_anytime_touchdown():
     [
         (27, 23, -3.5, g.HIT),
         (26, 23, -3.5, g.MISS),
-        (26, 23, -3.0, g.PUSH),
+        (26, 23, -3.0, g.MISS),  # covering by exactly the number is not covering
         (20, 23, +3.5, g.HIT),
     ],
 )
@@ -189,6 +190,29 @@ async def test_spread(bills, jets, line, expected):
     parsed = leg(market="spread", team="BUF", line=line)
     box = game("1", {"BUF": bills, "NYJ": jets})
     assert (await g.grade_leg(parsed, None, sched, loader(box))).result == expected
+
+
+@pytest.mark.parametrize("points", [23, 20])
+async def test_landing_exactly_on_an_under_line_is_a_miss(points):
+    sched = week(event("1", "CAR", "NO"))
+    box = game("1", {"CAR": 13, "NO": 16}, [player("Chuba Hubbard", "CAR", rushing_yards=points)])
+    parsed = leg(market="rushing_yards", subject="Chuba Hubbard", team="CAR",
+                 direction="under", line=20)
+    assert (await g.grade_leg(parsed, None, sched, loader(box))).result == g.MISS
+
+
+async def test_a_tied_moneyline_is_a_miss():
+    sched = week(event("1", "NYG", "DAL"))
+    parsed = leg(market="moneyline", team="NYG")
+    grade = await g.grade_leg(parsed, None, sched, loader(game("1", {"NYG": 20, "DAL": 20})))
+    assert grade.result == g.MISS
+
+
+async def test_no_result_is_ever_a_push():
+    """Guards the league rule itself, not just the cases above."""
+    assert not hasattr(g, "PUSH")
+    assert "push" not in g.TERMINAL
+    assert "push" not in g.MANUAL_RESULTS
 
 
 async def test_game_total():
@@ -281,8 +305,8 @@ async def test_two_players_who_both_played_is_never_guessed():
         ([g.HIT, g.MISS, g.PENDING], "lost"),  # one miss ends it, games still to play
         ([g.HIT, g.PENDING], g.PENDING),
         ([g.HIT, g.NEEDS_LINE], g.PENDING),
-        ([g.HIT, g.PUSH, g.VOID], "won"),  # pushes and voids drop out
-        ([g.PUSH, g.VOID], "void"),
+        ([g.HIT, g.VOID], "won"),  # an inactive player's leg drops out
+        ([g.VOID, g.VOID], "void"),
         ([], g.PENDING),
     ],
 )

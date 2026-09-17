@@ -148,11 +148,13 @@ reads each one into a separate `parsed` column (player or team, market, directio
 a bad reading can never destroy what someone meant to bet. The board shows how every leg was
 read, so a misreading gets noticed before kickoff rather than after grading.
 
-**Legs grade themselves as games finish, the way a sportsbook settles.** A whole-number line
-landing exactly is a push; "3+" is inclusive; anytime TDs count rushing, receiving and return
-scores but never a quarterback's passing TDs; pushes and voids drop out of the parlay; one
-miss busts it immediately. A player is only voided when ESPN ruled them out -- one merely
+**Legs grade themselves as games finish, the way a sportsbook settles -- minus pushes.**
+League rule: every leg is a hit or a miss. "3+" is inclusive, but over and under are strict,
+so "over 70" landing on exactly 70 is a miss, as is a spread covered by exactly the number or
+a tied moneyline. Anytime TDs count rushing, receiving and return scores but never a
+quarterback's passing TDs. One miss busts the parlay immediately. A player is only voided when ESPN ruled them out -- one merely
 missing from a box score is left for a person, since that also describes a misread name.
+Void is the only way a leg drops out of the parlay without busting it.
 
 **A leg with no line can't be graded by any API.** "Jordan Love over passing yards" never
 said over what, and ESPN has no player-prop lines to fall back on. The line gets set when the

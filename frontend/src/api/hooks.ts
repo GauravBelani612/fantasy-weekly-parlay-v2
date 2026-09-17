@@ -163,7 +163,7 @@ export interface SettleLeg {
   legId: string;
   /** Omit to leave the recorded line alone; null clears it. */
   line?: number | null;
-  result?: "hit" | "miss" | "push" | "void" | "pending";
+  result?: "hit" | "miss" | "void" | "pending";
 }
 
 export function useSettleLeg(leagueId: string, roundId: string) {

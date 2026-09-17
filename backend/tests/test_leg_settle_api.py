@@ -124,7 +124,9 @@ async def test_a_null_line_clears_it_but_omitting_it_does_not(client, login, boa
     assert _leg(cleared.json(), board["leg"].id)["payer_line"] is None
 
 
-@pytest.mark.parametrize("payload", [{}, {"result": "won"}, {"result": "HIT"}])
+@pytest.mark.parametrize(
+    "payload", [{}, {"result": "won"}, {"result": "HIT"}, {"result": "push"}]
+)
 async def test_bad_requests_are_rejected(client, login, board, payload):
     login(board["bob"])
     r = await client.patch(_url(board), json=payload)

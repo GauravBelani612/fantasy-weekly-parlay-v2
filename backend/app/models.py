@@ -229,7 +229,7 @@ class Leg(Base):
     parsed: Mapped[dict | None] = mapped_column(JsonCol, nullable=True)
     espn_event_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     american_odds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # pending | hit | miss | push | void | needs_line | unresolved
+    # pending | hit | miss | void | needs_line | unresolved. No push: league rule.
     result: Mapped[str] = mapped_column(String(16), default="pending")
 
     # The line actually placed, when the typed leg never said one ("Jordan Love over

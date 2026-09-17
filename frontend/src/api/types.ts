@@ -5,7 +5,6 @@ export type LegResult =
   | "pending"
   | "hit"
   | "miss"
-  | "push"
   | "void"
   /** No line anywhere: the payer records one, or settles the leg by hand. */
   | "needs_line"

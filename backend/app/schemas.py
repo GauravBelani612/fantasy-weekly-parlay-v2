@@ -126,7 +126,7 @@ class LegSettleIn(BaseModel):
     """
 
     line: float | None = Field(default=None, allow_inf_nan=False)
-    result: Literal["hit", "miss", "push", "void", "pending"] | None = None
+    result: Literal["hit", "miss", "void", "pending"] | None = None
 
 
 class LegIn(BaseModel):
