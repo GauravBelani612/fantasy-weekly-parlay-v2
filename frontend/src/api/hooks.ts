@@ -4,6 +4,7 @@ import { ApiError, api } from "./client";
 import type {
   League,
   LeagueDetail,
+  LeagueStats,
   Leg,
   Me,
   Round,
@@ -18,6 +19,7 @@ export const keys = {
   currentRound: (leagueId: string) => ["round", "current", leagueId] as const,
   rounds: (leagueId: string) => ["rounds", leagueId] as const,
   importable: (season?: string) => ["importable", season ?? "current"] as const,
+  stats: (leagueId: string) => ["stats", leagueId] as const,
 };
 
 export function useMe() {
@@ -136,7 +138,17 @@ function useRoundMutation<TVars>(
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.currentRound(leagueId) });
       qc.invalidateQueries({ queryKey: keys.rounds(leagueId) });
+      // A leg settled by hand changes hit rates, streaks and the leaderboard.
+      qc.invalidateQueries({ queryKey: keys.stats(leagueId) });
     },
+  });
+}
+
+export function useLeagueStats(leagueId: string | undefined) {
+  return useQuery({
+    queryKey: keys.stats(leagueId!),
+    queryFn: () => api.get<LeagueStats>(`/leagues/${leagueId}/stats`),
+    enabled: Boolean(leagueId),
   });
 }
 

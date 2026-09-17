@@ -121,3 +121,62 @@ export interface Round {
   your_leg: Leg | null;
   you_can_submit: boolean;
 }
+
+// ---------------------------------------------------------------- stats
+
+export interface Streak {
+  result: "hit" | "miss";
+  length: number;
+}
+
+export interface BetTypeStat {
+  label: string;
+  hits: number;
+  misses: number;
+  hit_rate: number | null;
+}
+
+export interface LeagueTotals {
+  /** Weeks locked with every leg settled; the per-week averages use only these. */
+  weeks_complete: number;
+  legs_hit: number;
+  legs_missed: number;
+  hit_rate: number | null;
+  avg_hits_per_week: number | null;
+  avg_legs_per_week: number | null;
+  best_week: { bet_week: number; hits: number; legs: number } | null;
+  parlays_won: number;
+  parlays_lost: number;
+  cash_rate: number | null;
+  /** Lost parlays where exactly one leg missed. */
+  one_leg_away: number;
+  by_bet_type: BetTypeStat[];
+  /** Everyone tied for funding the most parlays. */
+  top_payers: { member_id: string; display_name: string; times: number }[];
+}
+
+export interface MemberStats {
+  member_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  is_you: boolean;
+  hits: number;
+  misses: number;
+  voids: number;
+  hit_rate: number | null;
+  current_streak: Streak | null;
+  longest_hit_streak: number;
+  parlays_played: number;
+  parlays_won: number;
+  times_funded: number;
+  /** Finished weeks where this member's leg was the only miss. */
+  only_miss: number;
+  best_bet_type: BetTypeStat | null;
+}
+
+export interface LeagueStats {
+  season: string;
+  league: LeagueTotals;
+  /** Leaderboard order: most hits, then hit rate. */
+  members: MemberStats[];
+}

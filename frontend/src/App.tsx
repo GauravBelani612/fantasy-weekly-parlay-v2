@@ -8,6 +8,7 @@ import { LeaguesPage } from "./pages/LeaguesPage";
 import { LegalLinks, Privacy, Terms } from "./pages/Legal";
 import { Login } from "./pages/Login";
 import { SettingsPage } from "./pages/SettingsPage";
+import { StatsPage } from "./pages/StatsPage";
 
 function Header() {
   const me = useMe();
@@ -72,6 +73,7 @@ export default function App() {
         <Route path="/" element={<LeaguesPage />} />
         <Route path="/leagues/:leagueId" element={<LeagueHome />} />
         <Route path="/leagues/:leagueId/history" element={<HistoryPage />} />
+        <Route path="/leagues/:leagueId/stats" element={<StatsPage />} />
         <Route path="/leagues/:leagueId/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

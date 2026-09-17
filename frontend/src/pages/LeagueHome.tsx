@@ -262,7 +262,13 @@ export function LeagueHome() {
             {league.data.season} &middot; {league.data.total_rosters} teams
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to={`/leagues/${leagueId}/stats`}
+            className="rounded-lg border border-edge-strong px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-panel-hover"
+          >
+            Stats
+          </Link>
           <Link
             to={`/leagues/${leagueId}/history`}
             className="rounded-lg border border-edge-strong px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-panel-hover"
