@@ -49,3 +49,7 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      # Reads free-text legs so they can be graded automatically. Without it nothing
+      # grades on its own, though the payer can still mark every leg hit or miss by hand.
+      - key: ANTHROPIC_API_KEY
+        sync: false

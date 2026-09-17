@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import League
-from app.services import notify
+from app.services import notify, round_grading
 from app.services.rounds import ensure_current_round
 
 log = logging.getLogger(__name__)
@@ -35,14 +35,24 @@ async def run_tick(session: AsyncSession) -> TickReport:
         report.leagues_checked += 1
         try:
             rnd = await ensure_current_round(session, league)
-            if rnd is None:
-                continue
-            report.rounds_active += 1
-            sent = await notify.notify_round(session, league, rnd, app_url)
-            report.notifications_sent.extend(f"{league.name}:{kind}" for kind in sent)
+            if rnd is not None:
+                report.rounds_active += 1
+                sent = await notify.notify_round(session, league, rnd, app_url)
+                report.notifications_sent.extend(f"{league.name}:{kind}" for kind in sent)
         except Exception as exc:  # one bad league must not stop the rest
             log.exception("Tick failed for league %s", league.id)
             report.errors.append(f"{league.name}: {exc}")
+            await session.rollback()
+
+        # Graded separately from the current round, and on purpose. The moment a week's
+        # last game goes final the "current" round moves on to the next week -- so tying
+        # grading to it would never grade Monday night's legs.
+        try:
+            sent = await round_grading.grade_league(session, league, app_url)
+            report.notifications_sent.extend(f"{league.name}:{kind}" for kind in sent)
+        except Exception as exc:
+            log.exception("Grading failed for league %s", league.id)
+            report.errors.append(f"{league.name} grading: {exc}")
             await session.rollback()
 
     return report

@@ -334,3 +334,92 @@ def legs_ready(
     body += _button("Open the board", url)
 
     return shell(preheader=pre, heading=heading, body=body, league_name=league_name)
+
+
+# ---------------------------------------------------------------- settling the parlay
+
+# Result -> (label, text colour, background). Pushes and voids share a neutral chip: at a
+# sportsbook both simply drop out of the parlay.
+_RESULT_CHIPS = {
+    "hit": ("HIT", "#00794a", "#e3f5eb"),
+    "miss": ("MISS", "#b42318", "#fdeceb"),
+    "push": ("PUSH", "#5d6b79", "#eef1f4"),
+    "void": ("VOID", "#5d6b79", "#eef1f4"),
+}
+
+
+def _result_chip(result: str) -> str:
+    label, fg, bg = _RESULT_CHIPS.get(result, ("OPEN", "#8a96a3", "#f2f4f6"))
+    return (
+        f'<span style="display:inline-block;padding:3px 7px;border-radius:4px;'
+        f"font-family:{MONO};font-size:11px;font-weight:700;letter-spacing:0.4px;"
+        f'color:{fg};background:{bg};">{label}</span>'
+    )
+
+
+def graded_leg_list(legs: list[tuple[str, str, str, str | None]]) -> str:
+    """Each leg with its result and the stat that decided it: (text, who, result, detail)."""
+    rows = []
+    for text, who, result, detail in legs:
+        why = (
+            f'<div style="font-family:{FONT};font-size:12px;color:{MUTED};padding-top:3px;">'
+            f"{escape(detail)}</div>"
+            if detail
+            else ""
+        )
+        rows.append(
+            f'<tr><td valign="top" style="padding:10px 12px 10px 0;width:52px;">'
+            f"{_result_chip(result)}</td>"
+            f'<td style="padding:10px 0;border-bottom:1px solid {RULE};">'
+            f'<div style="font-family:{FONT};font-size:15px;color:{INK};">{escape(text)}</div>'
+            f'<div style="font-family:{FONT};font-size:12px;color:{MUTED};padding-top:2px;">'
+            f"{escape(who)}</div>{why}</td></tr>"
+        )
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'border="0" style="border-collapse:collapse;margin:4px 0 8px;">'
+        + "".join(rows)
+        + "</table>"
+    )
+
+
+def parlay_resolved(
+    league_name: str,
+    loser_name: str,
+    bet_week: int,
+    outcome: str,
+    legs: list[tuple[str, str, str, str | None]],
+    url: str,
+) -> str:
+    """The parlay has settled. Sent to the whole league: everyone put a leg in."""
+    count = len(legs)
+    hits = sum(1 for _, _, result, _ in legs if result == "hit")
+    dropped = sum(1 for _, _, result, _ in legs if result in ("push", "void"))
+
+    if outcome == "lost":
+        misses = [leg for leg in legs if leg[2] == "miss"]
+        text, who, _, detail = misses[0]
+        heading = f"Week {bet_week} parlay busted"
+        # Leads with the leg that sank it -- the thing everyone opens this to find out.
+        lead = _callout("Sunk by", f"{who}: {text}", detail or "")
+        if len(misses) > 1:
+            lead += _p(
+                f'<span style="color:{MUTED};">{len(misses)} legs missed in all.</span>',
+                size=14,
+            )
+        intro = _p(f"{hits} of {count} legs hit before it went down.")
+        pre = f"Busted by {who}'s {text}."
+    elif outcome == "won":
+        heading = f"Week {bet_week} parlay cashed"
+        note = f"{dropped} pushed or voided and dropped out" if dropped else "Clean sweep"
+        lead = _callout("Every leg came in", f"{hits} of {hits} hit", note)
+        intro = _p(f"{escape(loser_name)} funded it, and it paid.")
+        pre = f"All {hits} legs hit. Week {bet_week} cashed."
+    else:
+        heading = f"Week {bet_week} parlay voided"
+        lead = ""
+        intro = _p("Every leg pushed or was voided, so there was no parlay left to settle.")
+        pre = f"Week {bet_week} parlay voided."
+
+    body = intro + lead + graded_leg_list(legs) + _button("Open the board", url)
+    return shell(preheader=pre, heading=heading, body=body, league_name=league_name)

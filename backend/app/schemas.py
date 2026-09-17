@@ -6,6 +6,7 @@ write-only through the settings endpoint.
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -104,6 +105,28 @@ class LegOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_you: bool = False
+
+    # How the leg was understood, e.g. "Chase Brown (CIN) · anytime TD". Shown under the
+    # leg so a misreading is noticed by the league before kickoff, not after grading.
+    read_as: str | None = None
+    # Why it got its result: "Jordan Love: 247 passing yds, line over 224.5".
+    grade_detail: str | None = None
+    # "espn" or "manual".
+    graded_by: str | None = None
+    payer_line: float | None = None
+    # No line anywhere yet: the payer should record one, or settle the leg by hand.
+    needs_line: bool = False
+
+
+class LegSettleIn(BaseModel):
+    """The payer or commissioner recording a line, or settling a leg by hand.
+
+    Both fields are optional and only the ones sent are applied, so `{"line": null}`
+    clears a recorded line while omitting `line` leaves it alone.
+    """
+
+    line: float | None = Field(default=None, allow_inf_nan=False)
+    result: Literal["hit", "miss", "push", "void", "pending"] | None = None
 
 
 class LegIn(BaseModel):

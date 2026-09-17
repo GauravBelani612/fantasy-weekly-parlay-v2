@@ -1,8 +1,8 @@
 """Leg submission.
 
-`raw_text` is written exactly as typed and is the permanent source of truth. The later LLM
-normalization pass writes to `parsed` only, so a bad parse can never destroy what someone
-actually meant to bet.
+`raw_text` is written exactly as typed and is the permanent source of truth. The parsing
+pass writes to `parsed` only, so a bad reading can never destroy what someone actually meant
+to bet.
 """
 
 import logging
@@ -62,10 +62,17 @@ async def upsert_leg(
         leg = Leg(round_id=rnd.id, member_id=member.id, raw_text=text)
         session.add(leg)
     else:
-        leg.raw_text = text
-        # An edited leg invalidates any previous parse/grade.
-        leg.parsed = None
-        leg.result = "pending"
+        if leg.raw_text != text:
+            leg.raw_text = text
+            # A different bet: everything read or settled from the old text goes, including
+            # a line the payer recorded, which belonged to the bet that no longer exists.
+            leg.parsed = None
+            leg.result = "pending"
+            leg.payer_line = None
+            leg.grade_detail = None
+            leg.graded_by = None
+            leg.graded_at = None
+            leg.espn_event_id = None
 
     try:
         await session.commit()

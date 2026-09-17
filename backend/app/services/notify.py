@@ -319,3 +319,94 @@ async def notify_round(
             sent.append(KIND_LOCKED)
 
     return sent
+
+
+# ---------------------------------------------------------------- settling the parlay
+
+KIND_RESOLVED = "resolved"
+
+_RESOLVED_WORD = {"won": "cashed", "lost": "busted", "void": "voided"}
+_DISCORD_MARK = {"hit": "✅", "miss": "❌", "push": "➖", "void": "➖"}
+
+
+def resolution_kind(outcome: str) -> str:
+    """Ledger kind for an outcome.
+
+    Keyed on the outcome rather than a single "resolved", so a correction is announced
+    too: a parlay wrongly settled as busted and later corrected to cashed tells the league
+    both times, while each outcome is still only ever announced once.
+    """
+    return f"{KIND_RESOLVED}_{outcome}"
+
+
+async def notify_resolution(
+    session: AsyncSession, league: League, rnd: ParlayRound, app_url: str
+) -> list[str]:
+    """Tell the whole league the parlay settled, and which leg decided it."""
+    if rnd.outcome not in _RESOLVED_WORD:
+        return []
+
+    kind = resolution_kind(rnd.outcome)
+    sent: list[str] = []
+    league_url = f"{app_url.rstrip('/')}/leagues/{league.id}"
+
+    members = (
+        await session.scalars(select(LeagueMember).where(LeagueMember.league_id == league.id))
+    ).all()
+    names = {m.id: m.display_name for m in members}
+    loser_name = names.get(rnd.loser_member_id, "Nobody") if rnd.loser_member_id else "Nobody"
+
+    round_legs = await legs_service.list_legs(session, rnd)
+    rows = [
+        (leg.raw_text, names.get(leg.member_id, ""), leg.result, leg.grade_detail)
+        for leg in round_legs
+    ]
+
+    subject = f"{league.name.strip()}: week {rnd.bet_week} parlay {_RESOLVED_WORD[rnd.outcome]}"
+    html = tpl.parlay_resolved(
+        league_name=league.name,
+        loser_name=loser_name,
+        bet_week=rnd.bet_week,
+        outcome=rnd.outcome,
+        legs=rows,
+        url=league_url,
+    )
+
+    for person in await _recipients(session, league):
+        if await _already_sent(session, rnd.id, kind, "email", person.email):
+            continue
+        if not await _record(session, rnd.id, kind, "email", person.email):
+            continue
+        await send_email(person.email, subject, html)
+        sent.append(kind)
+
+    if league.discord_webhook_url and not await _already_sent(
+        session, rnd.id, kind, "discord", "webhook"
+    ):
+        if await _record(session, rnd.id, kind, "discord", "webhook"):
+            message = _discord_resolution(rnd, loser_name, rows, league_url)
+            await send_webhook(league.discord_webhook_url, message)
+            sent.append(kind)
+
+    return sent
+
+
+def _discord_resolution(
+    rnd: ParlayRound,
+    loser_name: str,
+    rows: list[tuple[str, str, str, str | None]],
+    url: str,
+) -> str:
+    week = rnd.bet_week
+    if rnd.outcome == "lost":
+        text, who, _, detail = next(r for r in rows if r[2] == "miss")
+        why = f" ({detail})" if detail else ""
+        headline = f"**Week {week} parlay busted** - sunk by {who}'s {text}{why}."
+    elif rnd.outcome == "won":
+        headline = f"**Week {week} parlay cashed!** Every leg came in. Funded by {loser_name}."
+    else:
+        headline = f"**Week {week} parlay voided** - every leg pushed or was voided."
+    lines = "\n".join(
+        f"{_DISCORD_MARK.get(result, '⏳')} {text} - {who}" for text, who, result, _ in rows
+    )
+    return f"{headline}\n{lines}\n{url}"

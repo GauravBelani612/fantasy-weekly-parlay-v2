@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.integrations.sleeper import avatar_url
 from app.models import League, LeagueMember, Leg, ParlayRound, User
 from app.schemas import LeagueDetailOut, LeagueOut, LegOut, MemberOut, RoundOut
+from app.services import grading
 from app.services import legs as legs_service
 from app.services.rounds import round_status
 
@@ -39,6 +40,12 @@ def leg_out(
         created_at=leg.created_at,
         updated_at=leg.updated_at,
         is_you=bool(member and current_user_id and member.user_id == current_user_id),
+        read_as=grading.read_as(leg.parsed, leg.payer_line),
+        grade_detail=leg.grade_detail,
+        graded_by=leg.graded_by,
+        payer_line=leg.payer_line,
+        # A leg settled by hand needs no line, whatever its text said.
+        needs_line=leg.graded_by != "manual" and grading.needs_line(leg.parsed, leg.payer_line),
     )
 
 

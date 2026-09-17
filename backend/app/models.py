@@ -222,13 +222,27 @@ class Leg(Base):
         Uuid, ForeignKey("league_members.id", ondelete="CASCADE"), index=True
     )
 
-    # Exactly what the user typed. Source of truth -- the LLM pass never overwrites this.
+    # Exactly what the user typed. Source of truth -- the parsing pass never overwrites this.
     raw_text: Mapped[str] = mapped_column(Text)
-    # Reserved for the later OpenAI normalization pass.
+    # How the parser read raw_text: player or team, market, direction, line. Written by
+    # the parser only, and cleared whenever raw_text changes.
     parsed: Mapped[dict | None] = mapped_column(JsonCol, nullable=True)
     espn_event_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     american_odds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # pending | hit | miss | push | void | needs_line | unresolved
     result: Mapped[str] = mapped_column(String(16), default="pending")
+
+    # The line actually placed, when the typed leg never said one ("Jordan Love over
+    # passing yards"). The payer sees the real sportsbook line when placing the bet, so
+    # it comes from them. Kept out of `parsed` so re-reading the text can never erase
+    # something a person entered.
+    payer_line: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Why the leg got its result, in terms a league member can check against the game.
+    grade_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "espn" when graded from the box score, "manual" when the payer or commissioner set
+    # it. The grader never touches a manual result.
+    graded_by: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
