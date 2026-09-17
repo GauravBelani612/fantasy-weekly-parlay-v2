@@ -129,7 +129,7 @@ function SettleControls({
             type="button"
             disabled={settle.isPending}
             onClick={() => send({ legId: leg.id, result: "pending" })}
-            className="text-xs text-slate-500 transition hover:text-slate-300 disabled:opacity-40"
+            className="rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:border-slate-400 hover:text-slate-200 disabled:opacity-40"
           >
             Back to automatic
           </button>
@@ -259,7 +259,7 @@ export function LegRow({
               <button
                 type="button"
                 onClick={() => setChanging(true)}
-                className="mt-2 text-xs font-semibold text-slate-500 transition hover:text-slate-300"
+                className="mt-2.5 rounded-lg border border-edge-strong px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-400 hover:text-white"
               >
                 {leg.result === "pending" ? "Settle by hand" : "Change result"}
               </button>
