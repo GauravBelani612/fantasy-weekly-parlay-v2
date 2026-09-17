@@ -123,7 +123,9 @@ async def grade_round(
 
     for leg in legs:
         if _grader_owns(leg):
-            grade = await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
+            grade = await grading.grade_leg(
+                leg.parsed, leg.payer_line, schedule, cache.summary, league.timezone
+            )
             apply_grade(leg, grade)
 
     await session.commit()
@@ -217,7 +219,10 @@ async def set_leg(
                     leg.raw_text, [e.name for e in schedule.events], rnd.bet_week
                 )
             apply_grade(
-                leg, await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)
+                leg,
+                await grading.grade_leg(
+                    leg.parsed, leg.payer_line, schedule, cache.summary, league.timezone
+                ),
             )
             await session.commit()
     except Exception:

@@ -226,11 +226,33 @@ async def test_game_total():
 # ------------------------------------------------------------- when it can't settle
 
 
-async def test_waits_for_the_game_to_finish():
+async def test_waits_for_the_game_to_finish_and_says_when_it_starts():
     sched = week(event("1", "PHI", "KC", final=False))
-    grade = await g.grade_leg(anytime_td("Saquon Barkley", "PHI"), None, sched, loader())
+    grade = await g.grade_leg(
+        anytime_td("Saquon Barkley", "PHI"), None, sched, loader(), "America/New_York"
+    )
     assert grade.result == g.PENDING
-    assert grade.detail == "Waiting on PHI @ KC"
+    # KICK is 2026-09-18 00:00 UTC -- Thursday evening in New York.
+    assert grade.detail == "Waiting on PHI @ KC · Thu 8 PM EDT"
+
+
+@pytest.mark.parametrize(
+    ("kickoff", "timezone", "expected"),
+    [
+        # Sunday 1pm ET, the most common slot: no ":00" on the hour.
+        (datetime(2026, 9, 20, 17, 0, tzinfo=UTC), "America/New_York", "Sun 1 PM EDT"),
+        (datetime(2026, 9, 21, 0, 20, tzinfo=UTC), "America/New_York", "Sun 8:20 PM EDT"),
+        # The same kickoff, read from a league set to the west coast.
+        (datetime(2026, 9, 20, 17, 0, tzinfo=UTC), "America/Los_Angeles", "Sun 10 AM PDT"),
+        # December: the clocks have gone back.
+        (datetime(2026, 12, 20, 18, 0, tzinfo=UTC), "America/New_York", "Sun 1 PM EST"),
+        # An unusable timezone falls back rather than raising mid-grade.
+        (datetime(2026, 9, 20, 17, 0, tzinfo=UTC), "Not/AZone", "Sun 5 PM UTC"),
+    ],
+)
+def test_kickoff_text(kickoff, timezone, expected):
+    kicking = NflEvent("1", "CIN @ HOU", kickoff, "STATUS_SCHEDULED", ("CIN", "HOU"))
+    assert g.kickoff_text(kicking, timezone) == expected
 
 
 async def test_a_ruled_out_player_voids_the_leg():

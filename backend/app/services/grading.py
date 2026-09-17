@@ -23,8 +23,10 @@ import re
 import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.integrations.espn import GameSummary, PlayerLine, WeekSchedule
+from app.integrations.espn import GameSummary, NflEvent, PlayerLine, WeekSchedule
 
 PENDING = "pending"
 HIT = "hit"
@@ -161,6 +163,27 @@ def find_player(players: list[PlayerLine], name: str, *, fuzzy: bool = True) -> 
     return PlayerMatch(None)
 
 
+def kickoff_text(event: NflEvent, timezone: str) -> str:
+    """When the game starts, in the league's timezone: "Sun 1 PM EDT".
+
+    Only portable strftime directives -- the %-I form is glibc-only and raises on Windows.
+    The minutes are dropped on the hour, since most kickoffs are on one.
+    """
+    start = event.kickoff_at
+    start = start if start.tzinfo else start.replace(tzinfo=UTC)
+    try:
+        start = start.astimezone(ZoneInfo(timezone))
+        label = start.strftime("%Z")
+    except (ZoneInfoNotFoundError, ValueError):
+        label = "UTC"
+    shape = "%a %I %p" if start.minute == 0 else "%a %I:%M %p"
+    return f"{start.strftime(shape).replace(' 0', ' ')} {label}"
+
+
+def _waiting(event: NflEvent, timezone: str) -> str:
+    return f"Waiting on {event.name} \u00b7 {kickoff_text(event, timezone)}"
+
+
 def _ruled_out(summary: GameSummary, name: str) -> str | None:
     want = name_key(name)
     return next((s for n, s in summary.ruled_out.items() if name_key(n) == want), None)
@@ -258,7 +281,11 @@ def _evaluate_player(parsed: dict, line: float, player: PlayerLine, event_id: st
 
 
 async def _grade_team(
-    parsed: dict, line: float | None, schedule: WeekSchedule, load: SummaryLoader
+    parsed: dict,
+    line: float | None,
+    schedule: WeekSchedule,
+    load: SummaryLoader,
+    timezone: str,
 ) -> Grade:
     market = parsed["market"]
     team = parsed.get("team")
@@ -269,11 +296,11 @@ async def _grade_team(
     if event is None:
         return Grade(UNRESOLVED, f"{team} don't play in week {schedule.week}")
     if not event.is_final:
-        return Grade(PENDING, f"Waiting on {event.name}", event.event_id)
+        return Grade(PENDING, _waiting(event, timezone), event.event_id)
 
     summary = await load(event.event_id)
     if summary is None or not summary.is_final:
-        return Grade(PENDING, f"Waiting on {event.name}", event.event_id)
+        return Grade(PENDING, _waiting(event, timezone), event.event_id)
 
     opponent = summary.opponent(team)
     ours, theirs = summary.scores.get(team), summary.scores.get(opponent or "")
@@ -303,7 +330,11 @@ async def _grade_team(
 
 
 async def _grade_player(
-    parsed: dict, line: float, schedule: WeekSchedule, load: SummaryLoader
+    parsed: dict,
+    line: float,
+    schedule: WeekSchedule,
+    load: SummaryLoader,
+    timezone: str,
 ) -> Grade:
     subject = parsed.get("subject") or ""
     team = parsed.get("team")
@@ -317,10 +348,10 @@ async def _grade_player(
     # Allen the Bills quarterback's passing line.
     if event is not None:
         if not event.is_final:
-            return Grade(PENDING, f"Waiting on {event.name}", event.event_id)
+            return Grade(PENDING, _waiting(event, timezone), event.event_id)
         summary = await load(event.event_id)
         if summary is None or not summary.is_final:
-            return Grade(PENDING, f"Waiting on {event.name}", event.event_id)
+            return Grade(PENDING, _waiting(event, timezone), event.event_id)
         match = find_player(summary.players, subject)
         if match.player:
             return _evaluate_player(parsed, line, match.player, event.event_id)
@@ -379,6 +410,7 @@ async def grade_leg(
     payer_line: float | None,
     schedule: WeekSchedule,
     load: SummaryLoader,
+    timezone: str = "UTC",
 ) -> Grade:
     """Settle one leg, or say plainly why it can't be settled yet."""
     if not parsed:
@@ -401,5 +433,5 @@ async def grade_leg(
         )
 
     if market in TEAM_MARKETS:
-        return await _grade_team(parsed, line, schedule, load)
-    return await _grade_player(parsed, line, schedule, load)
+        return await _grade_team(parsed, line, schedule, load, timezone)
+    return await _grade_player(parsed, line, schedule, load, timezone)
