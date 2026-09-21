@@ -103,6 +103,7 @@ async def update_settings(payload: LeagueSettingsIn, ctx: LeagueCtx, session: Db
     data = payload.model_dump(exclude_unset=True)
     for field in (
         "lock_offset_minutes",
+        "deadline_mode",
         "timezone",
         "first_scored_week",
         "last_scored_week",

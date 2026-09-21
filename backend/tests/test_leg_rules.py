@@ -1,14 +1,14 @@
-"""What the league will not let two people bet at the same time.
+"""Why a leg gets turned away.
 
-One slip, one opinion per thing. The cases below are the ones the league actually argued
-about: the same player's stat from both sides, and both halves of one game.
+One slip, one opinion per thing -- and, for a league betting from RedZone on, nothing that
+has already kicked off by the time the window opens.
 """
 
 from datetime import UTC, datetime
 
 from app.integrations.espn import NflEvent, WeekSchedule
 from app.models import Leg
-from app.services import conflicts
+from app.services import leg_rules
 
 KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)
 
@@ -23,12 +23,14 @@ SCHEDULE = WeekSchedule(
 )
 
 
-def rushing(subject: str, direction: str = "over", line: float = 50.5) -> dict:
+def rushing(
+    subject: str, direction: str = "over", line: float = 50.5, team: str = "PHI"
+) -> dict:
     return {
         "understood": True,
         "market": "rushing_yards",
         "subject": subject,
-        "team": "PHI",
+        "team": team,
         "direction": direction,
         "line": line,
     }
@@ -62,7 +64,7 @@ def board(*parsed: dict | None) -> list[Leg]:
 
 
 def clashes(new: dict | None, *existing: dict | None) -> bool:
-    return conflicts.find(new, SCHEDULE, board(*existing)) is not None
+    return leg_rules.find(new, SCHEDULE, board(*existing)) is not None
 
 
 # ------------------------------------------------------------------ one bet per player stat
@@ -163,8 +165,8 @@ def test_an_unreadable_leg_is_never_itself_refused():
 
 def test_no_schedule_at_all_still_blocks_a_repeat():
     legs = board(team_bet("moneyline", "KC"))
-    assert conflicts.find(team_bet("moneyline", "KC"), None, legs) is not None
-    assert conflicts.find(team_bet("moneyline", "PHI"), None, legs) is None
+    assert leg_rules.find(team_bet("moneyline", "KC"), None, legs) is not None
+    assert leg_rules.find(team_bet("moneyline", "PHI"), None, legs) is None
 
 
 # ------------------------------------------------------------------ what it says
@@ -172,8 +174,77 @@ def test_no_schedule_at_all_still_blocks_a_repeat():
 
 def test_the_refusal_names_the_person_and_their_leg():
     legs = [Leg(raw_text="Saquon over 50 rush yds", parsed=rushing("Saquon Barkley"))]
-    clash = conflicts.find(rushing("Saquon Barkley", "under"), SCHEDULE, legs)
+    clash = leg_rules.find(rushing("Saquon Barkley", "under"), SCHEDULE, legs)
     assert clash is not None
     message = clash.message("Byju")
     assert 'Byju already has "Saquon over 50 rush yds"' in message
     assert "one bet per player per stat" in message
+
+
+# ------------------------------------------------------------- betting from RedZone onward
+
+# The same week the deadline tests use: a Thursday game, an international Sunday morning
+# one, and the afternoon window RedZone leagues actually want.
+THU = datetime(2026, 9, 18, 0, 15, tzinfo=UTC)  # Thu 8:15pm ET
+LONDON = datetime(2026, 9, 20, 13, 30, tzinfo=UTC)  # Sun 9:30am ET
+REDZONE = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)  # Sun 1:00pm ET
+MONDAY = datetime(2026, 9, 22, 0, 15, tzinfo=UTC)  # Mon 8:15pm ET
+
+WINDOWED = WeekSchedule(
+    season="2026",
+    week=3,
+    events=[
+        NflEvent("t", "BUF @ MIA", THU, "STATUS_SCHEDULED", ("BUF", "MIA")),
+        NflEvent("l", "JAX @ ATL", LONDON, "STATUS_SCHEDULED", ("JAX", "ATL")),
+        NflEvent("r", "PHI @ KC", REDZONE, "STATUS_SCHEDULED", ("PHI", "KC")),
+        NflEvent("m", "CIN @ CLE", MONDAY, "STATUS_SCHEDULED", ("CIN", "CLE")),
+    ],
+)
+
+
+def early(parsed: dict | None, window: datetime | None = REDZONE) -> str | None:
+    return leg_rules.too_early(parsed, WINDOWED, window)
+
+
+def test_a_thursday_player_is_turned_away():
+    assert "BUF @ MIA" in early(rushing("James Cook", team="BUF"))
+
+
+def test_a_thursday_team_bet_is_turned_away_too():
+    """The rule is about the game, not about whether a person is named."""
+    assert early(team_bet("moneyline", "MIA")) is not None
+
+
+def test_the_international_morning_game_is_turned_away():
+    """Sunday, but three and a half hours before RedZone goes on air."""
+    assert "JAX @ ATL" in early(team_bet("moneyline", "JAX"))
+
+
+def test_a_game_in_the_window_is_fine():
+    assert early(rushing("Saquon Barkley")) is None
+    assert early(team_bet("moneyline", "KC")) is None
+
+
+def test_monday_night_is_still_fine():
+    """The rule is "not before the window", not "inside the Sunday window"."""
+    assert early(team_bet("moneyline", "CIN")) is None
+
+
+def test_the_refusal_says_what_to_do_instead():
+    message = early(team_bet("moneyline", "BUF"))
+    assert "before this league's window opens" in message
+    assert "starts then or later" in message
+
+
+def test_a_league_without_a_window_turns_nothing_away():
+    assert early(team_bet("moneyline", "BUF"), window=None) is None
+
+
+def test_a_team_the_schedule_cannot_place_is_left_alone():
+    """A bye or a misread abbreviation is not evidence of anything."""
+    assert early(team_bet("moneyline", "SEA")) is None
+
+
+def test_an_unread_leg_is_left_alone():
+    assert early(None) is None
+    assert early({"understood": False}) is None

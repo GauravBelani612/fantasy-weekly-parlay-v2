@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useLeague, useSyncLeague, useUpdateSettings } from "../api/hooks";
+import type { DeadlineMode } from "../api/types";
 import { Avatar, Button, ErrorNote, Panel, Spinner } from "../components/ui";
 
 export function SettingsPage() {
@@ -10,6 +11,7 @@ export function SettingsPage() {
   const update = useUpdateSettings(leagueId!);
   const sync = useSyncLeague(leagueId!);
 
+  const [mode, setMode] = useState<DeadlineMode | null>(null);
   const [lockOffset, setLockOffset] = useState<string | null>(null);
   const [firstWeek, setFirstWeek] = useState<string | null>(null);
   const [lastWeek, setLastWeek] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export function SettingsPage() {
             onSubmit={(event) => {
               event.preventDefault();
               const payload: Record<string, unknown> = {};
+              if (mode !== null) payload.deadline_mode = mode;
               if (lockOffset !== null) payload.lock_offset_minutes = Number(lockOffset);
               if (firstWeek !== null) payload.first_scored_week = Number(firstWeek);
               if (lastWeek !== null) payload.last_scored_week = Number(lastWeek);
@@ -45,8 +48,39 @@ export function SettingsPage() {
               update.mutate(payload);
             }}
           >
+            <fieldset className="block text-sm text-slate-400">
+              <legend>When the week's deadline falls</legend>
+              <div className="mt-2 space-y-2">
+                {(
+                  [
+                    ["first_kickoff", "The week's first kickoff", "Usually Thursday night."],
+                    [
+                      "sunday_redzone",
+                      "Sunday RedZone",
+                      "Locks Sunday instead, and only takes legs on games from the 1pm window onward \u2014 no Thursday, Friday or international morning games.",
+                    ],
+                  ] as const
+                ).map(([value, label, hint]) => (
+                  <label key={value} className="flex gap-2.5">
+                    <input
+                      type="radio"
+                      name="deadline_mode"
+                      value={value}
+                      checked={(mode ?? data.deadline_mode) === value}
+                      onChange={() => setMode(value)}
+                      className="mt-0.5 accent-emerald-500"
+                    />
+                    <span>
+                      <span className="text-slate-200">{label}</span>
+                      <span className="block text-xs text-slate-600">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
             <label className="block text-sm text-slate-400">
-              Lock submissions this many minutes before the first kickoff
+              Lock submissions this many minutes before that kickoff
               <input
                 type="number"
                 min={0}
@@ -56,7 +90,7 @@ export function SettingsPage() {
                 className="mt-1 w-full rounded-lg border border-edge-strong bg-input px-3 py-2 text-sm text-slate-100"
               />
               <span className="mt-1 block text-xs text-slate-600">
-                60 means legs close an hour before Thursday Night Football.
+                60 means legs close an hour before the game the deadline hangs off.
               </span>
             </label>
 

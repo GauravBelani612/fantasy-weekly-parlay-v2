@@ -11,7 +11,9 @@ from app.integrations.espn import NflEvent, WeekSchedule
 from app.models import ParlayRound
 from app.services import leg_parser
 
-KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)
+KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)  # Sun 1:00pm ET -- RedZone
+THURSDAY = datetime(2026, 9, 18, 0, 15, tzinfo=UTC)  # Thu 8:15pm ET
+REDZONE = KICK
 
 SAQUON_OVER = {"understood": True, "market": "rushing_yards", "subject": "Saquon Barkley",
                "team": "PHI", "direction": "over", "line": 50.5, "note": ""}
@@ -31,7 +33,10 @@ def reader(monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
 
     async def schedule(season, week):
-        events = [NflEvent("1", "PHI @ KC", KICK, "STATUS_SCHEDULED", ("PHI", "KC"))]
+        events = [
+            NflEvent("1", "PHI @ KC", KICK, "STATUS_SCHEDULED", ("PHI", "KC")),
+            NflEvent("2", "BUF @ MIA", THURSDAY, "STATUS_SCHEDULED", ("BUF", "MIA")),
+        ]
         return WeekSchedule(season=season, week=week, events=events)
 
     readings: dict[str, dict] = {}
@@ -319,3 +324,57 @@ async def test_the_reading_taken_at_submission_is_kept(client, login, scenario, 
     )
     assert r.status_code == 200, r.text
     assert r.json()["your_leg"]["read_as"] == "Saquon Barkley (PHI) · rushing yds over 50.5"
+
+
+# ------------------------------------------------------------------ betting from RedZone on
+
+
+async def test_a_game_before_the_window_is_refused(client, login, scenario, reader, session):
+    """A RedZone league will not take a Thursday leg, however well formed it is."""
+    rnd = scenario["round"]
+    rnd.window_opens_at = REDZONE
+    session.add(rnd)
+    await session.commit()
+
+    reader["Josh Allen anytime TD"] = {
+        "understood": True, "market": "touchdowns", "subject": "Josh Allen",
+        "team": "BUF", "direction": "at_least", "line": 1, "note": "",
+    }
+
+    login(scenario["alice"])
+    r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Josh Allen anytime TD"})
+    assert r.status_code == 409, r.text
+    assert "BUF @ MIA" in r.json()["detail"]
+    assert "Sunday RedZone" in r.json()["detail"]
+
+    r = await client.get(f"/rounds/{rnd.id}/legs")
+    assert r.json() == []
+
+
+async def test_a_game_inside_the_window_is_taken(client, login, scenario, reader, session):
+    rnd = scenario["round"]
+    rnd.window_opens_at = REDZONE
+    session.add(rnd)
+    await session.commit()
+
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+
+    login(scenario["alice"])
+    r = await client.put(
+        f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["window_opens_at"] is not None
+
+
+async def test_without_a_window_a_thursday_leg_is_fine(client, login, scenario, reader):
+    """The default league bets the whole week, Thursday included."""
+    rnd = scenario["round"]
+    reader["Josh Allen anytime TD"] = {
+        "understood": True, "market": "touchdowns", "subject": "Josh Allen",
+        "team": "BUF", "direction": "at_least", "line": 1, "note": "",
+    }
+
+    login(scenario["alice"])
+    r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Josh Allen anytime TD"})
+    assert r.status_code == 200, r.text

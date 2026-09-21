@@ -1,4 +1,8 @@
-"""Which legs cannot share a parlay.
+"""Why a leg can be refused.
+
+Two reasons so far, both decided at submission while the person is still looking at the box
+they typed into: the leg repeats or contradicts one already in, or it rides on a game that
+starts before the league's betting window opens.
 
 A week's parlay is one bet slip: every leg multiplies into the same payout. Two legs that
 cannot both land make the slip unwinnable before a ball is thrown. Two legs on one opinion
@@ -16,10 +20,11 @@ When that reading cannot be had the leg is taken anyway: see `find`.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.espn import WeekSchedule
+from app.integrations.espn import NflEvent, WeekSchedule
 from app.models import LeagueMember, Leg, ParlayRound
 from app.services import grading
 from app.services import legs as legs_service
@@ -32,6 +37,21 @@ _RULES: dict[str, str] = {
     "game_total": "A parlay takes one bet on a game's total.",
     "team_total": "A parlay takes one bet on a team's total.",
 }
+
+
+def _as_utc(value: datetime) -> datetime:
+    """SQLite hands back naive datetimes; normalize before comparing."""
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _event_for(parsed: dict, schedule: WeekSchedule | None) -> NflEvent | None:
+    """The game this leg rides on, whether it names a team or a player on one.
+
+    A player leg carries the team its reading was corrected to, so this is only as good as
+    the roster lookup that set it -- which is why that runs before any of this.
+    """
+    team = parsed.get("team")
+    return schedule.event_for_team(team) if team and schedule else None
 
 
 def _game(team: str, schedule: WeekSchedule | None) -> str:
@@ -85,6 +105,31 @@ def key(parsed: dict | None, schedule: WeekSchedule | None) -> tuple[str, str] |
     return None
 
 
+def too_early(
+    parsed: dict | None, schedule: WeekSchedule | None, window_opens_at: datetime | None
+) -> str | None:
+    """Why this leg starts too soon for the league's window, or None if it does not.
+
+    A league that bets from RedZone onward is saying the parlay is a Sunday afternoon thing.
+    A Thursday leg is settled before most of the league has watched a snap, and can leave
+    the whole slip dead before the window they actually care about opens.
+
+    Unknown means allowed, as everywhere else here: no window set, nothing read, or a game
+    the schedule cannot place (a bye, a misread abbreviation) all pass through.
+    """
+    if window_opens_at is None or not parsed or not parsed.get("understood"):
+        return None
+    event = _event_for(parsed, schedule)
+    if event is None:
+        return None
+    if _as_utc(event.kickoff_at) >= _as_utc(window_opens_at):
+        return None
+    return (
+        f"{event.name} kicks off before this league's window opens. The parlay runs from "
+        "Sunday RedZone, so pick a game that starts then or later."
+    )
+
+
 @dataclass(frozen=True)
 class Clash:
     """An existing leg that a new one cannot sit beside."""
@@ -121,8 +166,13 @@ async def refusal(
 ) -> str | None:
     """Why this member cannot submit this leg, or None if they can.
 
-    Their own leg is excluded: everyone gets exactly one, and submitting again replaces it.
+    The window is checked first: a leg outside it is wrong on its own terms, so saying so is
+    more use than naming whoever happens to also hold it.
     """
+    if early := too_early(parsed, schedule, rnd.window_opens_at):
+        return early
+
+    # Their own leg is excluded: everyone gets one, and submitting again replaces it.
     others = [
         leg for leg in await legs_service.list_legs(session, rnd) if leg.member_id != member.id
     ]

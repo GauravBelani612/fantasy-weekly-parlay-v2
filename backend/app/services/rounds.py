@@ -28,6 +28,34 @@ STATUS_UPCOMING = "upcoming"
 STATUS_OPEN = "open"
 STATUS_LOCKED = "locked"
 
+# Which kickoff the weekly deadline hangs off.
+DEADLINE_FIRST_KICKOFF = "first_kickoff"
+DEADLINE_SUNDAY_REDZONE = "sunday_redzone"
+DEADLINE_MODES = (DEADLINE_FIRST_KICKOFF, DEADLINE_SUNDAY_REDZONE)
+
+
+def deadline_anchor(league: League, week: NflWeek) -> datetime | None:
+    """The kickoff this league's lock is measured back from.
+
+    A RedZone league falls back to the first kickoff if the week somehow has no Sunday
+    afternoon window. Locking early is the conservative failure: it closes submissions
+    sooner than intended, where the other direction would let legs in after games began.
+    """
+    if league.deadline_mode == DEADLINE_SUNDAY_REDZONE and week.redzone_kickoff_at is not None:
+        return _as_utc(week.redzone_kickoff_at)
+    return _as_utc(week.first_kickoff_at) if week.first_kickoff_at is not None else None
+
+
+def window_opens(league: League, week: NflWeek) -> datetime | None:
+    """Earliest kickoff a leg may ride on, or None when any game in the week is fair game.
+
+    Only a RedZone league restricts this, and only when the week actually has a window to
+    point at -- there is no sense refusing every leg because ESPN returned a strange week.
+    """
+    if league.deadline_mode != DEADLINE_SUNDAY_REDZONE:
+        return None
+    return _as_utc(week.redzone_kickoff_at) if week.redzone_kickoff_at is not None else None
+
 
 @dataclass(frozen=True)
 class LoserResult:
@@ -71,6 +99,7 @@ async def sync_week_schedule(session: AsyncSession, season: str, week: int) -> N
     row = cached or NflWeek(season=season, week=week)
     row.first_kickoff_at = schedule.first_kickoff_at
     row.last_kickoff_at = schedule.last_kickoff_at
+    row.redzone_kickoff_at = schedule.redzone_kickoff_at
     row.event_count = len(schedule.events)
     row.all_final = schedule.all_final
     row.fetched_at = datetime.now(UTC)
@@ -194,9 +223,10 @@ async def ensure_current_round(session: AsyncSession, league: League) -> ParlayR
     if bet_schedule is None or bet_schedule.first_kickoff_at is None:
         return await _no_round(session, league)
 
-    locks_at = _as_utc(bet_schedule.first_kickoff_at) - timedelta(
-        minutes=league.lock_offset_minutes
-    )
+    anchor = deadline_anchor(league, bet_schedule)
+    if anchor is None:
+        return await _no_round(session, league)
+    locks_at = anchor - timedelta(minutes=league.lock_offset_minutes)
 
     rnd = await session.scalar(
         select(ParlayRound).where(
@@ -217,8 +247,10 @@ async def ensure_current_round(session: AsyncSession, league: League) -> ParlayR
         )
         session.add(rnd)
 
-    # Deadline can move if ESPN reschedules a game (flex, weather).
+    # Both can move: ESPN reschedules games (flex, weather), and the commissioner can
+    # change the deadline mode mid-week. Recomputed every tick rather than frozen at open.
     rnd.locks_at = locks_at
+    rnd.window_opens_at = window_opens(league, bet_schedule)
 
     if rnd.loser_member_id is None:
         await resolve_loser(session, league, rnd)

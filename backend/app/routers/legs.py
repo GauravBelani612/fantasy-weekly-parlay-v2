@@ -13,7 +13,7 @@ from app.integrations import espn
 from app.models import League, LeagueMember, Leg, ParlayRound
 from app.schemas import LegIn, LegOut, LegSettleIn, RoundOut
 from app.serializers import leg_out, round_out
-from app.services import conflicts, leg_parser, round_grading
+from app.services import grading, leg_parser, leg_rules, round_grading
 from app.services import legs as legs_service
 
 log = logging.getLogger(__name__)
@@ -71,6 +71,10 @@ async def _read_and_schedule(
     parsed = await leg_parser.parse_leg(
         text, matchups, rnd.bet_week, timeout=8.0, max_retries=1
     )
+    # Both rules key off which game the leg rides on, so the team has to be right before
+    # either one runs -- the model guesses at it, and a wrong guess would refuse a legal leg.
+    if grading.names_a_player(parsed):
+        parsed = grading.with_real_team(parsed, grading.roster_index(await espn.get_rosters()))
     return parsed, schedule
 
 
@@ -113,7 +117,7 @@ async def submit_my_leg(
     text = legs_service.clean_text(payload.raw_text)
 
     parsed, schedule = await _read_before_accepting(text, ctx.round)
-    if refusal := await conflicts.refusal(session, ctx.round, ctx.member, parsed, schedule):
+    if refusal := await leg_rules.refusal(session, ctx.round, ctx.member, parsed, schedule):
         raise HTTPException(status.HTTP_409_CONFLICT, refusal)
 
     leg = await legs_service.upsert_leg(session, ctx.round, ctx.member, text, parsed=parsed)

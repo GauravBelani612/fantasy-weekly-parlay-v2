@@ -62,6 +62,7 @@ export interface League {
   avatar_url: string | null;
   total_rosters: number;
   lock_offset_minutes: number;
+  deadline_mode: DeadlineMode;
   timezone: string;
   first_scored_week: number;
   last_scored_week: number;
@@ -95,6 +96,9 @@ export interface Leg {
   kickoff_at: string | null;
 }
 
+/** Which kickoff the weekly deadline hangs off. */
+export type DeadlineMode = "first_kickoff" | "sunday_redzone";
+
 export interface Round {
   id: string;
   league_id: string;
@@ -104,6 +108,8 @@ export interface Round {
   status: RoundStatus;
   opens_at: string;
   locks_at: string;
+  /** Earliest kickoff a leg may ride on. Null means any game in the week is fair game. */
+  window_opens_at: string | null;
 
   loser: Member | null;
   loser_points: number | null;

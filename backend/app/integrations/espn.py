@@ -10,6 +10,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from dateutil import parser as date_parser
 
@@ -20,6 +21,20 @@ log = logging.getLogger(__name__)
 
 REGULAR_SEASON = 2
 MAX_REGULAR_WEEK = 18
+
+# NFL RedZone goes on air with the Sunday afternoon window, which has kicked off at 1pm
+# Eastern for decades. Everything a league would want to exclude sits before it: Thursday
+# night, the occasional Friday holiday game, and the international slot at 9:30am Eastern.
+# Anchored to Eastern rather than UTC so it survives the clocks going back in November.
+REDZONE_HOUR_ET = 13
+_EASTERN = ZoneInfo("America/New_York")
+_SUNDAY = 6  # datetime.weekday(): Monday is 0
+
+
+def in_redzone_window(kickoff: datetime) -> bool:
+    """Whether a kickoff falls inside the Sunday RedZone window."""
+    local = (kickoff if kickoff.tzinfo else kickoff.replace(tzinfo=UTC)).astimezone(_EASTERN)
+    return local.weekday() == _SUNDAY and local.hour >= REDZONE_HOUR_ET
 
 # Exactly as ESPN spells them -- WSH, not WAS. The leg parser is constrained to this list,
 # since a team the scoreboard does not recognise can never be matched to a game.
@@ -70,6 +85,17 @@ class WeekSchedule:
     @property
     def last_kickoff_at(self) -> datetime | None:
         return max((e.kickoff_at for e in self.events), default=None)
+
+    @property
+    def redzone_kickoff_at(self) -> datetime | None:
+        """When the Sunday RedZone window opens this week, if it has one.
+
+        The earliest of the Sunday afternoon games rather than a fixed 1pm: a week whose
+        early window starts at 1:05 should not tell the league they may bet a 1:00 game.
+        """
+        return min(
+            (e.kickoff_at for e in self.events if in_redzone_window(e.kickoff_at)), default=None
+        )
 
     @property
     def all_final(self) -> bool:

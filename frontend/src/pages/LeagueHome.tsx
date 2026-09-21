@@ -10,7 +10,7 @@ import {
   useSubmitLeg,
 } from "../api/hooks";
 import type { LeagueDetail, Round } from "../api/types";
-import { Countdown, formatDeadline } from "../components/Countdown";
+import { Countdown, formatDeadline, formatKickoff } from "../components/Countdown";
 import { LegRow, OutcomePill } from "../components/Legs";
 import { Avatar, Button, ErrorNote, Panel, Spinner, StatusPill } from "../components/ui";
 
@@ -140,10 +140,20 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
       <h2 className="text-lg font-semibold text-white">
         Your leg for week {round.bet_week}
       </h2>
-      <p className="mt-1 mb-3 text-sm text-slate-400">
+      <p className="mt-1 text-sm text-slate-400">
         Write it however you like &mdash; &ldquo;Ja&apos;Marr Chase over 89.5 rec yds&rdquo;,
         &ldquo;Bills -3.5&rdquo;, &ldquo;Hurts anytime TD&rdquo;. One leg each.
       </p>
+      {/* The cutoff is an instant from the server, formatted here, so everyone reads it on
+          their own clock rather than the commissioner's. */}
+      {round.window_opens_at ? (
+        <p className="mt-1 mb-3 text-sm text-amber-200/80">
+          This league bets from Sunday RedZone on, so pick a game kicking off{" "}
+          {formatKickoff(round.window_opens_at)} or later.
+        </p>
+      ) : (
+        <div className="mb-3" />
+      )}
       <form
         onSubmit={(event) => {
           event.preventDefault();
