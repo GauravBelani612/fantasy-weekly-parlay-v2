@@ -1,13 +1,15 @@
 """Which legs cannot share a parlay.
 
 A week's parlay is one bet slip: every leg multiplies into the same payout. Two legs that
-cannot both win make the slip unwinnable before a ball is thrown, and two legs on the same
-thing spend two of the league's slots on one opinion. Both are refused at submission, while
+cannot both land make the slip unwinnable before a ball is thrown. Two legs on one opinion
+are the subtler problem -- the slip collects odds twice for risk it only took once, which
+is what a sportsbook means by correlated, and why it would decline to write the ticket at
+all. Neither is a house rule this league invented; both are refused at submission, while
 the person is still looking at the box they typed into.
 
-What counts as "the same thing" is deliberately coarse. Saquon over 50 and Saquon over 30
-do not contradict each other -- the second is nearly free if the first lands -- but they are
-one opinion bet twice, which is the thing the league wanted stopped.
+What counts as "the same thing" is therefore coarse on purpose. Saquon over 50 and Saquon
+over 30 do not contradict each other, but the second is all but implied by the first, so it
+is paid for without ever being at risk.
 
 Refusing needs a reading, so a leg is read before it is accepted rather than just after.
 When that reading cannot be had the leg is taken anyway: see `find`.
@@ -22,12 +24,13 @@ from app.models import LeagueMember, Leg, ParlayRound
 from app.services import grading
 from app.services import legs as legs_service
 
-# Why a key is exclusive, written to be read by whoever just got turned down.
+# Why a key is exclusive, written to be read by whoever just got turned down. Phrased as
+# what a parlay allows rather than what the league prefers, because that is what it is.
 _RULES: dict[str, str] = {
-    "player": "The league takes one bet per player per stat.",
-    "winner": "The league takes one bet on who wins a game -- either side of it counts.",
-    "game_total": "The league takes one bet on a game's total.",
-    "team_total": "The league takes one bet on a team's total.",
+    "player": "A parlay takes one bet per player per stat.",
+    "winner": "A parlay takes one bet on a game's result -- moneyline or spread, either side.",
+    "game_total": "A parlay takes one bet on a game's total.",
+    "team_total": "A parlay takes one bet on a team's total.",
 }
 
 
@@ -66,8 +69,13 @@ def key(parsed: dict | None, schedule: WeekSchedule | None) -> tuple[str, str] |
     if not team:
         return None
     if market in ("moneyline", "spread"):
-        # One key for the whole game. A spread and a moneyline on the same side are the
-        # same opinion; the two sides are opposite ones. The parlay gains nothing either way.
+        # One key for the whole game, covering both sides and both markets.
+        #
+        # Opposite sides cannot both land, so that slip is dead before kickoff. The same
+        # side is the interesting case: a moneyline is the -0.5 spread in all but name, and
+        # KC -3.5 already implies it. The wider line carries the entire bet while the
+        # moneyline leg collects odds without ever being at risk -- correlated, and not a
+        # ticket any book would write.
         return ("winner", _game(team, schedule))
     if market == "game_total":
         return ("game_total", _game(team, schedule))
