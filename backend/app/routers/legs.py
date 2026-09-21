@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 
@@ -8,11 +9,12 @@ from app.auth.session import CurrentUser, DbSession
 from app.config import settings
 from app.db import SessionLocal
 from app.deps import RoundCtx
+from app.integrations import espn
 from app.models import League, LeagueMember, Leg, ParlayRound
 from app.schemas import LegIn, LegOut, LegSettleIn, RoundOut
 from app.serializers import leg_out, round_out
+from app.services import conflicts, leg_parser, round_grading
 from app.services import legs as legs_service
-from app.services import round_grading
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +56,48 @@ async def _read_round(round_id: uuid.UUID) -> None:
         log.exception("Background read of round %s failed; the tick will retry", round_id)
 
 
+# Someone is watching a spinner for the length of this, so it is capped well below what
+# the tick allows itself. Past the cap the leg is taken unread and read again later.
+_READ_BUDGET_SECONDS = 12.0
+
+
+async def _read_and_schedule(
+    text: str, rnd: ParlayRound
+) -> tuple[dict | None, espn.WeekSchedule | None]:
+    schedule = await espn.get_week_schedule(rnd.season, rnd.bet_week)
+    matchups = [event.name for event in schedule.events]
+    # Tighter than parse_leg's own defaults, which are sized for a background sweep: three
+    # attempts at thirty seconds would leave the submitter hanging for a minute and a half.
+    parsed = await leg_parser.parse_leg(
+        text, matchups, rnd.bet_week, timeout=8.0, max_retries=1
+    )
+    return parsed, schedule
+
+
+async def _read_before_accepting(
+    text: str, rnd: ParlayRound
+) -> tuple[dict | None, espn.WeekSchedule | None]:
+    """Read a leg up front, so it can be refused while its author is still looking at it.
+
+    Best effort by design. If ESPN or the model is slow or unreachable we return nothing,
+    the leg is accepted unread and the tick reads it later. Turning submissions away
+    because an upstream is having a bad minute would be a worse rule than letting a
+    duplicate through -- the duplicate costs an argument, the refusal costs someone their
+    week.
+    """
+    if not settings.anthropic_api_key:
+        return None, None
+    try:
+        return await asyncio.wait_for(
+            _read_and_schedule(text, rnd), timeout=_READ_BUDGET_SECONDS
+        )
+    except TimeoutError:
+        log.warning("Reading a leg ran past %ss; taking it unread", _READ_BUDGET_SECONDS)
+    except Exception:
+        log.exception("Could not read a leg before accepting it; taking it unread")
+    return None, None
+
+
 @router.put("/me", response_model=RoundOut)
 async def submit_my_leg(
     payload: LegIn,
@@ -63,7 +107,16 @@ async def submit_my_leg(
     background: BackgroundTasks,
 ):
     """Create or replace your single leg. Editable until the round locks."""
-    leg = await legs_service.upsert_leg(session, ctx.round, ctx.member, payload.raw_text)
+    # Checked before anything is read: no reason to spend a model call on a leg the round
+    # will not take anyway.
+    legs_service.assert_submittable(ctx.round)
+    text = legs_service.clean_text(payload.raw_text)
+
+    parsed, schedule = await _read_before_accepting(text, ctx.round)
+    if refusal := await conflicts.refusal(session, ctx.round, ctx.member, parsed, schedule):
+        raise HTTPException(status.HTTP_409_CONFLICT, refusal)
+
+    leg = await legs_service.upsert_leg(session, ctx.round, ctx.member, text, parsed=parsed)
     # Skipped without a key: there is nothing to read with, and it keeps the test suite
     # from reaching for the network.
     if leg.parsed is None and settings.anthropic_api_key:

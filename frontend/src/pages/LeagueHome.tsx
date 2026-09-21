@@ -160,7 +160,9 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
         />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button type="submit" disabled={submit.isPending || !dirty || text.trim().length < 2}>
-            {round.your_leg ? "Update leg" : "Submit leg"}
+            {/* The leg is read and checked against the board before it is accepted, which
+                takes a beat. Say so rather than looking stuck. */}
+            {submit.isPending ? "Checking..." : round.your_leg ? "Update leg" : "Submit leg"}
           </Button>
           {round.your_leg && (
             <Button

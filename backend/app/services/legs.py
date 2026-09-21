@@ -46,27 +46,42 @@ def assert_submittable(rnd: ParlayRound) -> None:
         raise HTTPException(status.HTTP_409_CONFLICT, "This round has not opened yet.")
 
 
-async def upsert_leg(
-    session: AsyncSession, rnd: ParlayRound, member: LeagueMember, raw_text: str
-) -> Leg:
-    """Create or replace this member's single leg. Editable right up until lock."""
-    assert_submittable(rnd)
-
+def clean_text(raw_text: str) -> str:
+    """The text as it will be stored, or a refusal if there is nothing to store."""
     text = raw_text.strip()
     if len(text) < 2:
         # Literal 422 -- Starlette renamed its constant and we support both versions.
         raise HTTPException(422, "Your leg looks empty.")
+    return text
+
+
+async def upsert_leg(
+    session: AsyncSession,
+    rnd: ParlayRound,
+    member: LeagueMember,
+    raw_text: str,
+    parsed: dict | None = None,
+) -> Leg:
+    """Create or replace this member's single leg. Editable right up until lock.
+
+    `parsed` is a reading already taken of this exact text -- the submission path reads the
+    leg before accepting it, to check it against the rest of the slip, and passing that
+    along saves reading it a second time.
+    """
+    assert_submittable(rnd)
+
+    text = clean_text(raw_text)
 
     leg = await get_member_leg(session, rnd, member)
     if leg is None:
-        leg = Leg(round_id=rnd.id, member_id=member.id, raw_text=text)
+        leg = Leg(round_id=rnd.id, member_id=member.id, raw_text=text, parsed=parsed)
         session.add(leg)
     else:
         if leg.raw_text != text:
             leg.raw_text = text
             # A different bet: everything read or settled from the old text goes, including
             # a line the payer recorded, which belonged to the bet that no longer exists.
-            leg.parsed = None
+            leg.parsed = parsed
             leg.result = "pending"
             leg.payer_line = None
             leg.grade_detail = None

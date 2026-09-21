@@ -2,9 +2,46 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import pytest_asyncio
 
+from app.config import settings
+from app.integrations import espn
+from app.integrations.espn import NflEvent, WeekSchedule
 from app.models import ParlayRound
+from app.services import leg_parser
+
+KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)
+
+SAQUON_OVER = {"understood": True, "market": "rushing_yards", "subject": "Saquon Barkley",
+               "team": "PHI", "direction": "over", "line": 50.5, "note": ""}
+SAQUON_UNDER = {**SAQUON_OVER, "direction": "under"}
+SAQUON_TD = {"understood": True, "market": "touchdowns", "subject": "Saquon Barkley",
+             "team": "PHI", "direction": "at_least", "line": 1, "note": ""}
+
+
+@pytest.fixture
+def reader(monkeypatch):
+    """Turn on reading-before-accepting, with ESPN and the model both faked.
+
+    Every other test in this file wants the default: no key, so legs are taken unread and
+    nothing reaches the network. The conflict rule needs readings to compare, so it asks
+    for them here and says what each leg comes back as.
+    """
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+    async def schedule(season, week):
+        events = [NflEvent("1", "PHI @ KC", KICK, "STATUS_SCHEDULED", ("PHI", "KC"))]
+        return WeekSchedule(season=season, week=week, events=events)
+
+    readings: dict[str, dict] = {}
+
+    async def parse(raw_text, matchups=None, week=None, **_):
+        return readings.get(raw_text)
+
+    monkeypatch.setattr(espn, "get_week_schedule", schedule)
+    monkeypatch.setattr(leg_parser, "parse_leg", parse)
+    return readings
 
 
 @pytest_asyncio.fixture
@@ -200,3 +237,85 @@ async def test_only_loser_or_commissioner_records_the_result(client, login, scen
     assert r.status_code == 200
     assert r.json()["outcome"] == "won"
     assert r.json()["final_odds"] == "+1250"
+
+
+# ------------------------------------------------------------------ one opinion per slip
+
+
+async def test_a_leg_that_repeats_someone_elses_is_refused(client, login, scenario, reader):
+    rnd = scenario["round"]
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+    reader["Saquon under 50 rush yds"] = SAQUON_UNDER
+
+    login(scenario["alice"])
+    r = await client.put(
+        f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"}
+    )
+    assert r.status_code == 200, r.text
+
+    login(scenario["bob"])
+    r = await client.put(
+        f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon under 50 rush yds"}
+    )
+    assert r.status_code == 409, r.text
+    assert 'Alice already has "Saquon over 50 rush yds"' in r.json()["detail"]
+
+    # Refused means not stored, not stored-and-flagged.
+    r = await client.get(f"/rounds/{rnd.id}/legs")
+    assert [leg["raw_text"] for leg in r.json()] == ["Saquon over 50 rush yds"]
+
+
+async def test_a_different_stat_for_the_same_player_is_taken(client, login, scenario, reader):
+    rnd = scenario["round"]
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+    reader["Saquon anytime TD"] = SAQUON_TD
+
+    login(scenario["alice"])
+    await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"})
+
+    login(scenario["bob"])
+    r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon anytime TD"})
+    assert r.status_code == 200, r.text
+    assert r.json()["submitted_count"] == 2
+
+
+async def test_replacing_your_own_leg_never_clashes_with_it(client, login, scenario, reader):
+    """One leg each, so a resubmit is an edit rather than a second bet."""
+    rnd = scenario["round"]
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+    reader["Saquon under 50 rush yds"] = SAQUON_UNDER
+
+    login(scenario["alice"])
+    await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"})
+    r = await client.put(
+        f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon under 50 rush yds"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["your_leg"]["raw_text"] == "Saquon under 50 rush yds"
+
+
+async def test_a_leg_the_parser_could_not_read_is_still_taken(client, login, scenario, reader):
+    """An upstream outage must not start turning submissions away."""
+    rnd = scenario["round"]
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+
+    login(scenario["alice"])
+    await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"})
+
+    login(scenario["bob"])
+    r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "whatever bruv"})
+    assert r.status_code == 200, r.text
+    assert r.json()["submitted_count"] == 2
+
+
+async def test_the_reading_taken_at_submission_is_kept(client, login, scenario, reader):
+    """Read once on the way in, not again in the background."""
+    rnd = scenario["round"]
+    reader["Saquon over 50 rush yds"] = SAQUON_OVER
+
+    login(scenario["alice"])
+    r = await client.put(
+        f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Saquon over 50 rush yds"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["your_leg"]["read_as"] == "Saquon Barkley (PHI) · rushing yds over 50.5"
