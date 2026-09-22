@@ -58,7 +58,7 @@ class ImportLeagueIn(BaseModel):
 
 class LeagueSettingsIn(BaseModel):
     lock_offset_minutes: int | None = Field(default=None, ge=0, le=10080)
-    deadline_mode: Literal["first_kickoff", "sunday_redzone"] | None = None
+    deadline_mode: Literal["first_kickoff", "sunday"] | None = None
     timezone: str | None = Field(default=None, max_length=64)
     first_scored_week: int | None = Field(default=None, ge=1, le=18)
     last_scored_week: int | None = Field(default=None, ge=1, le=18)
@@ -147,7 +147,7 @@ class RoundOut(BaseModel):
     status: str
     opens_at: datetime
     locks_at: datetime
-    # Earliest kickoff a leg may ride on, for a league betting from RedZone onward. Null
+    # Earliest kickoff a leg may ride on, for a league betting Sunday onward. Null
     # means any game in the week is fair game. Sent as an instant so the browser can say
     # when that is in the reader's own timezone.
     window_opens_at: datetime | None = None

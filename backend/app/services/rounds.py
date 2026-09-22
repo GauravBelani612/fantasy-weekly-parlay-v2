@@ -30,31 +30,31 @@ STATUS_LOCKED = "locked"
 
 # Which kickoff the weekly deadline hangs off.
 DEADLINE_FIRST_KICKOFF = "first_kickoff"
-DEADLINE_SUNDAY_REDZONE = "sunday_redzone"
-DEADLINE_MODES = (DEADLINE_FIRST_KICKOFF, DEADLINE_SUNDAY_REDZONE)
+DEADLINE_SUNDAY = "sunday"
+DEADLINE_MODES = (DEADLINE_FIRST_KICKOFF, DEADLINE_SUNDAY)
 
 
 def deadline_anchor(league: League, week: NflWeek) -> datetime | None:
     """The kickoff this league's lock is measured back from.
 
-    A RedZone league falls back to the first kickoff if the week somehow has no Sunday
-    afternoon window. Locking early is the conservative failure: it closes submissions
-    sooner than intended, where the other direction would let legs in after games began.
+    A Sunday league falls back to the first kickoff if the week somehow has no Sunday game.
+    Locking early is the conservative failure: it closes submissions sooner than intended,
+    where the other direction would let legs in after games had already begun.
     """
-    if league.deadline_mode == DEADLINE_SUNDAY_REDZONE and week.redzone_kickoff_at is not None:
-        return _as_utc(week.redzone_kickoff_at)
+    if league.deadline_mode == DEADLINE_SUNDAY and week.sunday_kickoff_at is not None:
+        return _as_utc(week.sunday_kickoff_at)
     return _as_utc(week.first_kickoff_at) if week.first_kickoff_at is not None else None
 
 
 def window_opens(league: League, week: NflWeek) -> datetime | None:
     """Earliest kickoff a leg may ride on, or None when any game in the week is fair game.
 
-    Only a RedZone league restricts this, and only when the week actually has a window to
-    point at -- there is no sense refusing every leg because ESPN returned a strange week.
+    Only a Sunday league restricts this, and only when the week actually has a Sunday game
+    to point at -- there is no sense refusing every leg because ESPN returned a strange week.
     """
-    if league.deadline_mode != DEADLINE_SUNDAY_REDZONE:
+    if league.deadline_mode != DEADLINE_SUNDAY:
         return None
-    return _as_utc(week.redzone_kickoff_at) if week.redzone_kickoff_at is not None else None
+    return _as_utc(week.sunday_kickoff_at) if week.sunday_kickoff_at is not None else None
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ async def sync_week_schedule(session: AsyncSession, season: str, week: int) -> N
     row = cached or NflWeek(season=season, week=week)
     row.first_kickoff_at = schedule.first_kickoff_at
     row.last_kickoff_at = schedule.last_kickoff_at
-    row.redzone_kickoff_at = schedule.redzone_kickoff_at
+    row.sunday_kickoff_at = schedule.sunday_kickoff_at
     row.event_count = len(schedule.events)
     row.all_final = schedule.all_final
     row.fetched_at = datetime.now(UTC)

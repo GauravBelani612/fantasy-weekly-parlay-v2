@@ -148,7 +148,7 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
           their own clock rather than the commissioner's. */}
       {round.window_opens_at ? (
         <p className="mt-1 mb-3 text-sm text-amber-200/80">
-          This league bets from Sunday RedZone on, so pick a game kicking off{" "}
+          This league bets Sunday onward, so pick a game kicking off{" "}
           {formatKickoff(round.window_opens_at)} or later.
         </p>
       ) : (

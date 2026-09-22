@@ -110,9 +110,9 @@ def too_early(
 ) -> str | None:
     """Why this leg starts too soon for the league's window, or None if it does not.
 
-    A league that bets from RedZone onward is saying the parlay is a Sunday afternoon thing.
-    A Thursday leg is settled before most of the league has watched a snap, and can leave
-    the whole slip dead before the window they actually care about opens.
+    A league that bets Sunday onward is saying the parlay is a Sunday thing. A Thursday leg
+    is settled before most of the league has watched a snap, and can leave the whole slip
+    dead before the day they actually care about starts.
 
     Unknown means allowed, as everywhere else here: no window set, nothing read, or a game
     the schedule cannot place (a bye, a misread abbreviation) all pass through.
@@ -125,8 +125,8 @@ def too_early(
     if _as_utc(event.kickoff_at) >= _as_utc(window_opens_at):
         return None
     return (
-        f"{event.name} kicks off before this league's window opens. The parlay runs from "
-        "Sunday RedZone, so pick a game that starts then or later."
+        f"{event.name} kicks off before Sunday football starts. This league bets from the "
+        "first Sunday game on, so pick a game starting then or later."
     )
 
 

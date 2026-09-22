@@ -11,9 +11,9 @@ from app.integrations.espn import NflEvent, WeekSchedule
 from app.models import ParlayRound
 from app.services import leg_parser
 
-KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)  # Sun 1:00pm ET -- RedZone
+KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)  # Sun 1:00pm ET
 THURSDAY = datetime(2026, 9, 18, 0, 15, tzinfo=UTC)  # Thu 8:15pm ET
-REDZONE = KICK
+SUNDAY_OPEN = KICK
 
 SAQUON_OVER = {"understood": True, "market": "rushing_yards", "subject": "Saquon Barkley",
                "team": "PHI", "direction": "over", "line": 50.5, "note": ""}
@@ -326,13 +326,13 @@ async def test_the_reading_taken_at_submission_is_kept(client, login, scenario, 
     assert r.json()["your_leg"]["read_as"] == "Saquon Barkley (PHI) · rushing yds over 50.5"
 
 
-# ------------------------------------------------------------------ betting from RedZone on
+# ------------------------------------------------------------------ betting Sunday onward
 
 
 async def test_a_game_before_the_window_is_refused(client, login, scenario, reader, session):
-    """A RedZone league will not take a Thursday leg, however well formed it is."""
+    """A Sunday league will not take a Thursday leg, however well formed it is."""
     rnd = scenario["round"]
-    rnd.window_opens_at = REDZONE
+    rnd.window_opens_at = SUNDAY_OPEN
     session.add(rnd)
     await session.commit()
 
@@ -345,7 +345,7 @@ async def test_a_game_before_the_window_is_refused(client, login, scenario, read
     r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Josh Allen anytime TD"})
     assert r.status_code == 409, r.text
     assert "BUF @ MIA" in r.json()["detail"]
-    assert "Sunday RedZone" in r.json()["detail"]
+    assert "first Sunday game" in r.json()["detail"]
 
     r = await client.get(f"/rounds/{rnd.id}/legs")
     assert r.json() == []
@@ -353,7 +353,7 @@ async def test_a_game_before_the_window_is_refused(client, login, scenario, read
 
 async def test_a_game_inside_the_window_is_taken(client, login, scenario, reader, session):
     rnd = scenario["round"]
-    rnd.window_opens_at = REDZONE
+    rnd.window_opens_at = SUNDAY_OPEN
     session.add(rnd)
     await session.commit()
 

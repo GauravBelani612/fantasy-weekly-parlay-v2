@@ -88,8 +88,8 @@ class League(Base):
     # Minutes before the week's deadline anchor that submissions lock.
     lock_offset_minutes: Mapped[int] = mapped_column(Integer, default=60)
     # Which kickoff the lock is measured back from: 'first_kickoff' (Thursday night, in a
-    # normal week) or 'sunday_redzone'. RedZone leagues also refuse legs on games that
-    # start before the window -- see services/leg_rules.py.
+    # normal week) or 'sunday', the first Sunday game. A Sunday league also refuses legs on
+    # games that start before that -- see services/leg_rules.py.
     deadline_mode: Mapped[str] = mapped_column(String(32), default="first_kickoff")
     timezone: Mapped[str] = mapped_column(String(64), default="America/New_York")
     # Write-only via the API -- never serialized back to clients.
@@ -150,9 +150,9 @@ class NflWeek(Base):
     week: Mapped[int] = mapped_column(Integer, primary_key=True)
     first_kickoff_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_kickoff_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # When the Sunday afternoon window opens, for leagues whose deadline follows RedZone.
-    # Nullable: a week could in principle have no Sunday afternoon games.
-    redzone_kickoff_at: Mapped[datetime | None] = mapped_column(
+    # When Sunday football starts, for leagues that only bet Sunday onward. Nullable: a
+    # week could in principle have no Sunday games at all.
+    sunday_kickoff_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     event_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -202,7 +202,7 @@ class ParlayRound(Base):
 
     opens_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     locks_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Earliest kickoff a leg may ride on, for a league that bets from RedZone onward. NULL
+    # Earliest kickoff a leg may ride on, for a league that bets Sunday onward. NULL
     # means no restriction. Recorded on the round rather than read from the league each
     # time, so the rule a week was played under stays visible after a setting changes.
     window_opens_at: Mapped[datetime | None] = mapped_column(

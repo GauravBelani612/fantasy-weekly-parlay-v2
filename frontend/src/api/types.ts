@@ -97,7 +97,7 @@ export interface Leg {
 }
 
 /** Which kickoff the weekly deadline hangs off. */
-export type DeadlineMode = "first_kickoff" | "sunday_redzone";
+export type DeadlineMode = "first_kickoff" | "sunday";
 
 export interface Round {
   id: string;

@@ -22,19 +22,16 @@ log = logging.getLogger(__name__)
 REGULAR_SEASON = 2
 MAX_REGULAR_WEEK = 18
 
-# NFL RedZone goes on air with the Sunday afternoon window, which has kicked off at 1pm
-# Eastern for decades. Everything a league would want to exclude sits before it: Thursday
-# night, the occasional Friday holiday game, and the international slot at 9:30am Eastern.
-# Anchored to Eastern rather than UTC so it survives the clocks going back in November.
-REDZONE_HOUR_ET = 13
+# Sunday is decided on the Eastern clock rather than UTC: a 4:25pm Pacific kickoff is
+# already Monday in UTC, and the clocks going back in November must not move the boundary.
 _EASTERN = ZoneInfo("America/New_York")
 _SUNDAY = 6  # datetime.weekday(): Monday is 0
 
 
-def in_redzone_window(kickoff: datetime) -> bool:
-    """Whether a kickoff falls inside the Sunday RedZone window."""
+def is_sunday_kickoff(kickoff: datetime) -> bool:
+    """Whether a game kicks off on Sunday, US Eastern."""
     local = (kickoff if kickoff.tzinfo else kickoff.replace(tzinfo=UTC)).astimezone(_EASTERN)
-    return local.weekday() == _SUNDAY and local.hour >= REDZONE_HOUR_ET
+    return local.weekday() == _SUNDAY
 
 # Exactly as ESPN spells them -- WSH, not WAS. The leg parser is constrained to this list,
 # since a team the scoreboard does not recognise can never be matched to a game.
@@ -87,14 +84,15 @@ class WeekSchedule:
         return max((e.kickoff_at for e in self.events), default=None)
 
     @property
-    def redzone_kickoff_at(self) -> datetime | None:
-        """When the Sunday RedZone window opens this week, if it has one.
+    def sunday_kickoff_at(self) -> datetime | None:
+        """When Sunday football starts this week, if the week has a Sunday game at all.
 
-        The earliest of the Sunday afternoon games rather than a fixed 1pm: a week whose
-        early window starts at 1:05 should not tell the league they may bet a 1:00 game.
+        Read off the schedule rather than pinned to an hour, so the international morning
+        slot counts when a week has one -- which in 2026 is most of them, and pulls the
+        window three and a half hours earlier than the 1pm slate on those weeks.
         """
         return min(
-            (e.kickoff_at for e in self.events if in_redzone_window(e.kickoff_at)), default=None
+            (e.kickoff_at for e in self.events if is_sunday_kickoff(e.kickoff_at)), default=None
         )
 
     @property

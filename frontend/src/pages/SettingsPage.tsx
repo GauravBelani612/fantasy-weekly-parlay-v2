@@ -55,9 +55,9 @@ export function SettingsPage() {
                   [
                     ["first_kickoff", "The week's first kickoff", "Usually Thursday night."],
                     [
-                      "sunday_redzone",
-                      "Sunday RedZone",
-                      "Locks Sunday instead, and only takes legs on games from the 1pm window onward \u2014 no Thursday, Friday or international morning games.",
+                      "sunday",
+                      "The first Sunday kickoff",
+                      "Locks Sunday morning instead, and only takes legs on Sunday and Monday games. A week with an international morning game opens \u2014 and locks \u2014 about three hours earlier than one without.",
                     ],
                   ] as const
                 ).map(([value, label, hint]) => (
