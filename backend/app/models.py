@@ -91,6 +91,10 @@ class League(Base):
     # normal week) or 'sunday', the first Sunday game. A Sunday league also refuses legs on
     # games that start before that -- see services/leg_rules.py.
     deadline_mode: Mapped[str] = mapped_column(String(32), default="first_kickoff")
+    # Whether a leg may ride on a Monday game. Off keeps the parlay settled by Sunday night,
+    # at the cost of a slate a tenth smaller. Unlike the deadline mode this never moves the
+    # lock: it only narrows which games are in reach.
+    allow_monday: Mapped[bool] = mapped_column(Boolean, default=True)
     timezone: Mapped[str] = mapped_column(String(64), default="America/New_York")
     # Write-only via the API -- never serialized back to clients.
     discord_webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -155,6 +159,10 @@ class NflWeek(Base):
     sunday_kickoff_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When Monday football starts, for leagues that keep Monday out.
+    monday_kickoff_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     event_count: Mapped[int] = mapped_column(Integer, default=0)
     # True once every ESPN event for the week reports STATUS_FINAL.
     all_final: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -206,6 +214,11 @@ class ParlayRound(Base):
     # means no restriction. Recorded on the round rather than read from the league each
     # time, so the rule a week was played under stays visible after a setting changes.
     window_opens_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Latest kickoff a leg may ride on, exclusive, for a league that keeps Monday out. NULL
+    # means no upper bound. Recorded per round for the same reason as window_opens_at.
+    window_closes_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 

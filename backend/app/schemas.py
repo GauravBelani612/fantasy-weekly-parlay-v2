@@ -59,6 +59,7 @@ class ImportLeagueIn(BaseModel):
 class LeagueSettingsIn(BaseModel):
     lock_offset_minutes: int | None = Field(default=None, ge=0, le=10080)
     deadline_mode: Literal["first_kickoff", "sunday"] | None = None
+    allow_monday: bool | None = None
     timezone: str | None = Field(default=None, max_length=64)
     first_scored_week: int | None = Field(default=None, ge=1, le=18)
     last_scored_week: int | None = Field(default=None, ge=1, le=18)
@@ -85,6 +86,7 @@ class LeagueOut(BaseModel):
     total_rosters: int
     lock_offset_minutes: int
     deadline_mode: str
+    allow_monday: bool
     timezone: str
     first_scored_week: int
     last_scored_week: int
@@ -151,6 +153,8 @@ class RoundOut(BaseModel):
     # means any game in the week is fair game. Sent as an instant so the browser can say
     # when that is in the reader's own timezone.
     window_opens_at: datetime | None = None
+    # Latest kickoff a leg may ride on, exclusive, for a league that keeps Monday out.
+    window_closes_at: datetime | None = None
 
     loser: MemberOut | None = None
     loser_points: float | None = None

@@ -100,6 +100,22 @@ function LoserCard({ round, league }: { round: Round; league: LeagueDetail }) {
   );
 }
 
+/** What the league's window allows, in the reader's own timezone. */
+function windowNote(round: Round): string | null {
+  const opens = round.window_opens_at;
+  const closes = round.window_closes_at;
+  if (opens && closes) {
+    return `This league bets Sunday only, so pick a game kicking off ${formatKickoff(opens)} or later, but before ${formatKickoff(closes)}.`;
+  }
+  if (opens) {
+    return `This league bets Sunday onward, so pick a game kicking off ${formatKickoff(opens)} or later.`;
+  }
+  if (closes) {
+    return `This league keeps Monday out, so pick a game kicking off before ${formatKickoff(closes)}.`;
+  }
+  return null;
+}
+
 function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
   const submit = useSubmitLeg(leagueId, round.id);
   const remove = useDeleteLeg(leagueId, round.id);
@@ -134,6 +150,7 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
   }
 
   const dirty = text.trim() !== (round.your_leg?.raw_text ?? "");
+  const note = windowNote(round);
 
   return (
     <Panel>
@@ -144,16 +161,9 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
         Write it however you like &mdash; &ldquo;Ja&apos;Marr Chase over 89.5 rec yds&rdquo;,
         &ldquo;Bills -3.5&rdquo;, &ldquo;Hurts anytime TD&rdquo;. One leg each.
       </p>
-      {/* The cutoff is an instant from the server, formatted here, so everyone reads it on
+      {/* The bounds are instants from the server, formatted here, so everyone reads them on
           their own clock rather than the commissioner's. */}
-      {round.window_opens_at ? (
-        <p className="mt-1 mb-3 text-sm text-amber-200/80">
-          This league bets Sunday onward, so pick a game kicking off{" "}
-          {formatKickoff(round.window_opens_at)} or later.
-        </p>
-      ) : (
-        <div className="mb-3" />
-      )}
+      {note ? <p className="mt-1 mb-3 text-sm text-amber-200/80">{note}</p> : <div className="mb-3" />}
       <form
         onSubmit={(event) => {
           event.preventDefault();

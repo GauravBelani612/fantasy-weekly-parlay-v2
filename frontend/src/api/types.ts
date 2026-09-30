@@ -63,6 +63,7 @@ export interface League {
   total_rosters: number;
   lock_offset_minutes: number;
   deadline_mode: DeadlineMode;
+  allow_monday: boolean;
   timezone: string;
   first_scored_week: number;
   last_scored_week: number;
@@ -110,6 +111,8 @@ export interface Round {
   locks_at: string;
   /** Earliest kickoff a leg may ride on. Null means any game in the week is fair game. */
   window_opens_at: string | null;
+  /** Latest kickoff a leg may ride on, exclusive. Null means no upper bound. */
+  window_closes_at: string | null;
 
   loser: Member | null;
   loser_points: number | null;

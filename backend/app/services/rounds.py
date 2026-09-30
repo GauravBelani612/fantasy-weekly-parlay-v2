@@ -46,6 +46,22 @@ def deadline_anchor(league: League, week: NflWeek) -> datetime | None:
     return _as_utc(week.first_kickoff_at) if week.first_kickoff_at is not None else None
 
 
+def window_closes(league: League, week: NflWeek) -> datetime | None:
+    """Latest kickoff a leg may ride on, exclusive, or None when nothing is out of reach.
+
+    Only a league that has turned Monday off restricts this. It does not touch the lock:
+    Monday being out of bounds is about which games are available, not about when the slip
+    stops taking legs.
+    """
+    # `is not False` rather than truthiness: a League built in memory carries None here
+    # until it is flushed, and None has to mean the default. deadline_mode's None already
+    # falls through to first_kickoff for the same reason -- an unset setting must never be
+    # read as the more restrictive choice.
+    if league.allow_monday is not False:
+        return None
+    return _as_utc(week.monday_kickoff_at) if week.monday_kickoff_at is not None else None
+
+
 def window_opens(league: League, week: NflWeek) -> datetime | None:
     """Earliest kickoff a leg may ride on, or None when any game in the week is fair game.
 
@@ -100,6 +116,7 @@ async def sync_week_schedule(session: AsyncSession, season: str, week: int) -> N
     row.first_kickoff_at = schedule.first_kickoff_at
     row.last_kickoff_at = schedule.last_kickoff_at
     row.sunday_kickoff_at = schedule.sunday_kickoff_at
+    row.monday_kickoff_at = schedule.monday_kickoff_at
     row.event_count = len(schedule.events)
     row.all_final = schedule.all_final
     row.fetched_at = datetime.now(UTC)
@@ -251,6 +268,7 @@ async def ensure_current_round(session: AsyncSession, league: League) -> ParlayR
     # change the deadline mode mid-week. Recomputed every tick rather than frozen at open.
     rnd.locks_at = locks_at
     rnd.window_opens_at = window_opens(league, bet_schedule)
+    rnd.window_closes_at = window_closes(league, bet_schedule)
 
     if rnd.loser_member_id is None:
         await resolve_loser(session, league, rnd)

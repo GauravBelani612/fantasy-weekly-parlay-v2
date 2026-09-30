@@ -104,6 +104,7 @@ async def update_settings(payload: LeagueSettingsIn, ctx: LeagueCtx, session: Db
     for field in (
         "lock_offset_minutes",
         "deadline_mode",
+        "allow_monday",
         "timezone",
         "first_scored_week",
         "last_scored_week",

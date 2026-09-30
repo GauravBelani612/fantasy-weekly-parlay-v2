@@ -12,6 +12,7 @@ export function SettingsPage() {
   const sync = useSyncLeague(leagueId!);
 
   const [mode, setMode] = useState<DeadlineMode | null>(null);
+  const [monday, setMonday] = useState<boolean | null>(null);
   const [lockOffset, setLockOffset] = useState<string | null>(null);
   const [firstWeek, setFirstWeek] = useState<string | null>(null);
   const [lastWeek, setLastWeek] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export function SettingsPage() {
               event.preventDefault();
               const payload: Record<string, unknown> = {};
               if (mode !== null) payload.deadline_mode = mode;
+              if (monday !== null) payload.allow_monday = monday;
               if (lockOffset !== null) payload.lock_offset_minutes = Number(lockOffset);
               if (firstWeek !== null) payload.first_scored_week = Number(firstWeek);
               if (lastWeek !== null) payload.last_scored_week = Number(lastWeek);
@@ -91,6 +93,22 @@ export function SettingsPage() {
               />
               <span className="mt-1 block text-xs text-slate-600">
                 60 means legs close an hour before the game the deadline hangs off.
+              </span>
+            </label>
+
+            <label className="flex gap-2.5 text-sm text-slate-400">
+              <input
+                type="checkbox"
+                checked={monday ?? data.allow_monday}
+                onChange={(event) => setMonday(event.target.checked)}
+                className="mt-0.5 accent-emerald-500"
+              />
+              <span>
+                <span className="text-slate-200">Allow Monday night games</span>
+                <span className="block text-xs text-slate-600">
+                  Off means the week is over on Sunday night, at the cost of one game. It does
+                  not move the deadline.
+                </span>
               </span>
             </label>
 

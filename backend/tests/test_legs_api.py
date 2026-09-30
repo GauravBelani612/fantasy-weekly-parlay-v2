@@ -13,6 +13,7 @@ from app.services import leg_parser
 
 KICK = datetime(2026, 9, 20, 17, 0, tzinfo=UTC)  # Sun 1:00pm ET
 THURSDAY = datetime(2026, 9, 18, 0, 15, tzinfo=UTC)  # Thu 8:15pm ET
+MONDAY_NIGHT = datetime(2026, 9, 22, 0, 15, tzinfo=UTC)  # Mon 8:15pm ET
 SUNDAY_OPEN = KICK
 
 SAQUON_OVER = {"understood": True, "market": "rushing_yards", "subject": "Saquon Barkley",
@@ -36,6 +37,7 @@ def reader(monkeypatch):
         events = [
             NflEvent("1", "PHI @ KC", KICK, "STATUS_SCHEDULED", ("PHI", "KC")),
             NflEvent("2", "BUF @ MIA", THURSDAY, "STATUS_SCHEDULED", ("BUF", "MIA")),
+            NflEvent("3", "DAL @ NYG", MONDAY_NIGHT, "STATUS_SCHEDULED", ("DAL", "NYG")),
         ]
         return WeekSchedule(season=season, week=week, events=events)
 
@@ -44,7 +46,16 @@ def reader(monkeypatch):
     async def parse(raw_text, matchups=None, week=None, **_):
         return readings.get(raw_text)
 
+    async def rosters():
+        return [
+            ("Saquon Barkley", "PHI"),
+            ("Jalen Hurts", "PHI"),
+            ("Josh Allen", "BUF"),
+            ("Dak Prescott", "DAL"),
+        ]
+
     monkeypatch.setattr(espn, "get_week_schedule", schedule)
+    monkeypatch.setattr(espn, "get_rosters", rosters)
     monkeypatch.setattr(leg_parser, "parse_leg", parse)
     return readings
 
@@ -378,3 +389,24 @@ async def test_without_a_window_a_thursday_leg_is_fine(client, login, scenario, 
     login(scenario["alice"])
     r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Josh Allen anytime TD"})
     assert r.status_code == 200, r.text
+
+
+async def test_a_monday_game_is_refused_when_monday_is_off(
+    client, login, scenario, reader, session
+):
+    """The other end of the window, and it does not need the Sunday deadline turned on."""
+    rnd = scenario["round"]
+    rnd.window_closes_at = MONDAY_NIGHT
+    session.add(rnd)
+    await session.commit()
+
+    reader["Dak anytime TD"] = {
+        "understood": True, "market": "touchdowns", "subject": "Dak Prescott",
+        "team": "DAL", "direction": "at_least", "line": 1, "note": "",
+    }
+
+    login(scenario["alice"])
+    r = await client.put(f"/rounds/{rnd.id}/legs/me", json={"raw_text": "Dak anytime TD"})
+    assert r.status_code == 409, r.text
+    assert "DAL @ NYG" in r.json()["detail"]
+    assert "Monday game" in r.json()["detail"]

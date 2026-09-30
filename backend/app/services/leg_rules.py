@@ -130,6 +130,27 @@ def too_early(
     )
 
 
+def too_late(
+    parsed: dict | None, schedule: WeekSchedule | None, window_closes_at: datetime | None
+) -> str | None:
+    """Why this leg runs past the league's window, or None if it does not.
+
+    A league that keeps Monday out wants the week over on Sunday night: nobody enjoys a slip
+    that hangs on one more game after everyone else has stopped watching.
+    """
+    if window_closes_at is None or not parsed or not parsed.get("understood"):
+        return None
+    event = _event_for(parsed, schedule)
+    if event is None:
+        return None
+    if _as_utc(event.kickoff_at) < _as_utc(window_closes_at):
+        return None
+    return (
+        f"{event.name} is a Monday game, and this league keeps the parlay to games before "
+        "then. Pick an earlier one."
+    )
+
+
 @dataclass(frozen=True)
 class Clash:
     """An existing leg that a new one cannot sit beside."""
@@ -166,11 +187,13 @@ async def refusal(
 ) -> str | None:
     """Why this member cannot submit this leg, or None if they can.
 
-    The window is checked first: a leg outside it is wrong on its own terms, so saying so is
-    more use than naming whoever happens to also hold it.
+    The window is checked first, at both ends: a leg outside it is wrong on its own terms,
+    so saying so is more use than naming whoever happens to also hold it.
     """
     if early := too_early(parsed, schedule, rnd.window_opens_at):
         return early
+    if late := too_late(parsed, schedule, rnd.window_closes_at):
+        return late
 
     # Their own leg is excluded: everyone gets one, and submitting again replaces it.
     others = [

@@ -248,3 +248,37 @@ def test_a_team_the_schedule_cannot_place_is_left_alone():
 def test_an_unread_leg_is_left_alone():
     assert early(None) is None
     assert early({"understood": False}) is None
+
+
+# ------------------------------------------------------------------ keeping Monday out
+
+
+def late(parsed: dict | None, window: datetime | None = MONDAY) -> str | None:
+    return leg_rules.too_late(parsed, WINDOWED, window)
+
+
+def test_a_monday_game_is_turned_away_when_monday_is_off():
+    assert "CIN @ CLE" in late(team_bet("moneyline", "CIN"))
+
+
+def test_a_monday_player_is_turned_away_too():
+    assert late(rushing("Quinshon Judkins", team="CLE")) is not None
+
+
+def test_sunday_is_still_in_reach():
+    assert late(team_bet("moneyline", "KC")) is None
+    assert late(team_bet("moneyline", "IND")) is None
+
+
+def test_thursday_is_not_too_late():
+    """Only the upper bound is being checked here -- too_early owns the other end."""
+    assert late(team_bet("moneyline", "BUF")) is None
+
+
+def test_no_upper_bound_turns_nothing_away():
+    assert late(team_bet("moneyline", "CIN"), window=None) is None
+
+
+def test_an_unread_leg_is_left_alone_at_this_end_too():
+    assert late(None) is None
+    assert late({"understood": False}) is None

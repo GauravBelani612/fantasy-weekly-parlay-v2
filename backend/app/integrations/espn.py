@@ -26,12 +26,21 @@ MAX_REGULAR_WEEK = 18
 # already Monday in UTC, and the clocks going back in November must not move the boundary.
 _EASTERN = ZoneInfo("America/New_York")
 _SUNDAY = 6  # datetime.weekday(): Monday is 0
+_MONDAY = 0
+
+
+def _eastern(kickoff: datetime) -> datetime:
+    return (kickoff if kickoff.tzinfo else kickoff.replace(tzinfo=UTC)).astimezone(_EASTERN)
 
 
 def is_sunday_kickoff(kickoff: datetime) -> bool:
     """Whether a game kicks off on Sunday, US Eastern."""
-    local = (kickoff if kickoff.tzinfo else kickoff.replace(tzinfo=UTC)).astimezone(_EASTERN)
-    return local.weekday() == _SUNDAY
+    return _eastern(kickoff).weekday() == _SUNDAY
+
+
+def is_monday_kickoff(kickoff: datetime) -> bool:
+    """Whether a game kicks off on Monday, US Eastern."""
+    return _eastern(kickoff).weekday() == _MONDAY
 
 # Exactly as ESPN spells them -- WSH, not WAS. The leg parser is constrained to this list,
 # since a team the scoreboard does not recognise can never be matched to a game.
@@ -93,6 +102,18 @@ class WeekSchedule:
         """
         return min(
             (e.kickoff_at for e in self.events if is_sunday_kickoff(e.kickoff_at)), default=None
+        )
+
+    @property
+    def monday_kickoff_at(self) -> datetime | None:
+        """When Monday football starts this week, if the week has a Monday game.
+
+        Doubles as the upper bound for a league that keeps Monday out: every game before it
+        is Sunday or earlier. A week with a Tuesday game would fall outside it too, which is
+        what such a league wants -- the point is a parlay settled by Sunday night.
+        """
+        return min(
+            (e.kickoff_at for e in self.events if is_monday_kickoff(e.kickoff_at)), default=None
         )
 
     @property
