@@ -15,6 +15,7 @@ from app.services.leg_parser import ParsedLeg
 CHASE = ParsedLeg(
     understood=True,
     market="touchdowns",
+    subject_as_written="Chase Brown",
     subject="Chase Brown",
     team="CIN",
     direction="at_least",
@@ -99,14 +100,17 @@ async def test_sends_the_request_it_should(client):
     await leg_parser.parse_leg("Giants money line", ["NYG @ DAL"], week=2)
     sent = fake.calls[0]
 
-    assert sent["model"] == "claude-haiku-4-5"
+    assert sent["model"] == "claude-opus-5"
     assert sent["output_format"] is ParsedLeg
-    # None of these works the same way on every current model: Haiku 4.5 rejects `effort`,
-    # a `thinking` config valid on one model is rejected on another, and the refusal
-    # fallback exists for Opus 5 / Fable 5.1. Tests can't reach the live API, so leaving all
-    # of them out is what keeps the model swappable without a 400 appearing in production.
-    for rejected in ("output_config", "thinking", "betas", "fallbacks"):
-        assert rejected not in sent, f"{rejected} is not accepted by every model"
+    # Reading one leg is small work, so the cheapest effort level is plenty. The SDK merges
+    # this with the schema it builds from output_format.
+    assert sent["output_config"] == {"effort": "low"}
+    # Still left out: `thinking` is configured differently on every model and Opus 5 runs
+    # adaptive without being asked, and the refusal fallback would mean moving to the beta
+    # endpoint for a refusal that reading a bet slip is never going to trigger. Tests cannot
+    # reach the live API, so leaving these out is what keeps a 400 out of production.
+    for rejected in ("thinking", "betas", "fallbacks"):
+        assert rejected not in sent, f"{rejected} would need verifying against the live API"
     content = sent["messages"][0]["content"]
     # The typed text is fenced as data, and this week's games give it context.
     assert "<leg>\nGiants money line\n</leg>" in content
@@ -150,7 +154,7 @@ async def test_no_failure_escapes(client, error):
 async def test_an_unreadable_leg_is_a_result_not_a_failure(client):
     """understood=False is an answer to record, distinct from a call that failed."""
     unreadable = ParsedLeg(
-        understood=False, market=None, subject=None, team=None,
+        understood=False, market=None, subject_as_written=None, subject=None, team=None,
         direction=None, line=None, note="Not a bet.",
     )
     client(result=FakeResponse(parsed=unreadable))

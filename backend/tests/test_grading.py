@@ -349,9 +349,10 @@ def test_name_key_lines_up_the_ways_people_type_names(typed, espn):
     assert g.name_key(typed) == g.name_key(espn)
 
 
-# ------------------------------------------------------------- whose team is it anyway
+# ------------------------------------------------------------- who the leg is actually on
 
-# Deliberately includes two Josh Allens, as the real league does.
+# The real roster's awkward cases: two Josh Allens, a Mc- surname, a hyphenated one, and a
+# rookie the model had never heard of.
 ROSTER = g.roster_index(
     [
         ("Carnell Tate", "TEN"),
@@ -359,38 +360,110 @@ ROSTER = g.roster_index(
         ("Ja'Marr Chase", "CIN"),
         ("Josh Allen", "BUF"),
         ("Josh Allen", "JAX"),
+        ("Jaxon Smith-Njigba", "SEA"),
+        ("Christian McCaffrey", "SF"),
+        ("Chris McClellan", "GB"),
+        ("Amon-Ra St. Brown", "DET"),
+        ("Denzel Boston", "CLE"),
+        ("Saquon Barkley", "PHI"),
     ]
 )
 
 
+def written(text: str, market: str = "touchdowns") -> dict:
+    """A leg the model only copied the name out of, which is all it is now asked to do."""
+    return leg(market=market, subject_as_written=text, subject=None, team=None,
+               direction="at_least", line=1)
+
+
 def test_the_roster_overrules_the_model():
     """The live board's Carnell Tate leg: a 2026 rookie the model put on the Rams."""
-    assert g.with_real_team(anytime_td("Carnell Tate", "LAR"), ROSTER)["team"] == "TEN"
+    assert g.ground(anytime_td("Carnell Tate", "LAR"), ROSTER)["team"] == "TEN"
 
 
 def test_the_roster_fills_in_a_team_the_model_left_out():
-    assert g.with_real_team(anytime_td("Chase Brown", None), ROSTER)["team"] == "CIN"
+    assert g.ground(anytime_td("Chase Brown", None), ROSTER)["team"] == "CIN"
 
 
 def test_a_name_is_matched_however_it_was_typed():
-    assert g.with_real_team(anytime_td("jamarr chase", "KC"), ROSTER)["team"] == "CIN"
+    assert g.ground(anytime_td("jamarr chase", "KC"), ROSTER)["team"] == "CIN"
 
 
 def test_a_shared_name_keeps_the_models_guess():
     """Two Josh Allens: the model's reading of the bet is the better tiebreak."""
-    assert g.with_real_team(anytime_td("Josh Allen", "BUF"), ROSTER)["team"] == "BUF"
+    assert g.ground(anytime_td("Josh Allen", "BUF"), ROSTER)["team"] == "BUF"
 
 
 def test_a_player_nobody_has_heard_of_is_left_alone():
     """A typo should not cost a leg the team the model did get right."""
-    assert g.with_real_team(anytime_td("Chse Brwn", "CIN"), ROSTER)["team"] == "CIN"
+    assert g.ground(anytime_td("Hcse Bwrn", "CIN"), ROSTER)["team"] == "CIN"
 
 
 def test_a_team_bet_is_never_touched():
     """KC's moneyline is about KC, not about whoever plays for them."""
     parsed = leg(market="moneyline", team="KC")
-    assert g.with_real_team(parsed, ROSTER) is parsed
+    assert g.ground(parsed, ROSTER) is parsed
 
 
 def test_an_unread_leg_is_never_touched():
-    assert g.with_real_team(None, ROSTER) is None
+    assert g.ground(None, ROSTER) is None
+
+
+# ------------------------------------------------------------- the abbreviations people type
+
+
+def test_an_initialism_resolves_to_one_player():
+    """The live board's leg: "JSN" read correctly one week, called ambiguous the next."""
+    grounded = g.ground(written("Jsn", "receptions"), ROSTER)
+    assert (grounded["subject"], grounded["team"]) == ("Jaxon Smith-Njigba", "SEA")
+
+
+def test_a_mc_surname_counts_for_two_letters():
+    """A Mc- surname has to give M and C, or no four-letter initialism would ever land."""
+    assert "cmc" in g._aliases("Christian McCaffrey")
+
+
+def test_a_four_letter_initialism_works_too():
+    assert g.ground(written("ARSB"), ROSTER)["subject"] == "Amon-Ra St. Brown"
+
+
+def test_a_surname_alone_resolves_when_it_is_unique():
+    """The live board's leg: a rookie the model could not place at all."""
+    grounded = g.ground(written("Boston", "receiving_yards"), ROSTER)
+    assert (grounded["subject"], grounded["team"]) == ("Denzel Boston", "CLE")
+
+
+def test_a_shared_surname_resolves_to_nobody():
+    """Two Josh Allens means "Allen" is not an answer."""
+    assert g.ground(written("Allen"), ROSTER)["subject"] is None
+
+
+def test_an_abbreviation_nobody_answers_to_is_left_alone():
+    assert g.ground(written("zzq"), ROSTER)["subject"] is None
+
+
+def test_the_full_name_still_wins_over_an_abbreviation():
+    """Chase is both a surname here and half of Ja'Marr Chase -- spelling it out decides it."""
+    grounded = g.ground(written("Ja'Marr Chase"), ROSTER)
+    assert grounded["subject"] == "Ja'Marr Chase"
+
+
+def test_a_first_name_alone_resolves_when_it_is_unique():
+    """Nobody writes Saquon Barkley's surname, and nobody has to."""
+    grounded = g.ground(written("Saquon"), ROSTER)
+    assert grounded["subject"] == "Saquon Barkley"
+
+
+def test_a_shared_first_name_resolves_to_nobody():
+    assert g.ground(written("Josh"), ROSTER)["subject"] is None
+
+
+def test_an_ambiguous_abbreviation_falls_back_to_the_models_expansion():
+    """CMC is two players on the real roster, so the roster declines and the model decides.
+
+    The lookup still earns its place: the model had McCaffrey on the wrong team.
+    """
+    parsed = leg(market="touchdowns", subject_as_written="cmc",
+                 subject="Christian McCaffrey", team="LAR", direction="at_least", line=1)
+    grounded = g.ground(parsed, ROSTER)
+    assert (grounded["subject"], grounded["team"]) == ("Christian McCaffrey", "SF")

@@ -71,10 +71,10 @@ async def _read_and_schedule(
     parsed = await leg_parser.parse_leg(
         text, matchups, rnd.bet_week, timeout=8.0, max_retries=1
     )
-    # Both rules key off which game the leg rides on, so the team has to be right before
-    # either one runs -- the model guesses at it, and a wrong guess would refuse a legal leg.
+    # Both rules key off which game the leg rides on, so who the leg names has to be
+    # settled before either runs -- a wrong team would refuse a perfectly legal leg.
     if grading.names_a_player(parsed):
-        parsed = grading.with_real_team(parsed, grading.roster_index(await espn.get_rosters()))
+        parsed = grading.ground(parsed, grading.roster_index(await espn.get_rosters()))
     return parsed, schedule
 
 

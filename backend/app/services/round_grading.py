@@ -128,17 +128,19 @@ async def grade_round(
     for leg, reading in zip(unread, readings, strict=True):
         leg.parsed = reading
 
-    # Whose team the model guessed at, corrected from the roster before that team is
-    # used to pick a game. Fetched only when a player leg actually needs it, and only
-    # once per pass however many legs that is.
+    # Who each player leg is actually on, from the roster rather than from the model's
+    # memory of one. Fetched only when a player leg needs it, and once per pass however
+    # many legs that is.
     mine = [leg for leg in legs if _grader_owns(leg)]
     if any(grading.names_a_player(leg.parsed) for leg in mine):
         rosters = await cache.rosters()
         for leg in mine:
-            corrected = grading.with_real_team(leg.parsed, rosters)
-            if corrected != leg.parsed:
-                log.info("Leg %s: team corrected to %s", leg.id, corrected["team"])
-                leg.parsed = corrected
+            grounded = grading.ground(leg.parsed, rosters)
+            if grounded != leg.parsed:
+                log.info(
+                    "Leg %s: read as %s (%s)", leg.id, grounded["subject"], grounded["team"]
+                )
+                leg.parsed = grounded
 
     for leg in mine:
         grade = await grading.grade_leg(leg.parsed, leg.payer_line, schedule, cache.summary)

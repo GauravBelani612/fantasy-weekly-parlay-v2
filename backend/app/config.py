@@ -37,7 +37,11 @@ class Settings(BaseSettings):
     # The cheapest current model. Reading a leg is short, schema-constrained extraction,
     # which it handles without thinking. Any current model can be swapped in here: the
     # request deliberately avoids parameters only some models accept.
-    leg_parse_model: str = "claude-haiku-4-5"
+    # Haiku 4.5 read a 2026 rookie as unidentifiable, called "Jsn" ambiguous having read
+    # "JSN" correctly a week earlier, and claimed a team was not playing while holding a
+    # matchup list whose last entry was that team's game. At roughly two dollars a season
+    # for a league this size, the cheaper model is not worth the hand-settling.
+    leg_parse_model: str = "claude-opus-5"
 
     sleeper_base_url: str = "https://api.sleeper.app/v1"
     espn_base_url: str = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"

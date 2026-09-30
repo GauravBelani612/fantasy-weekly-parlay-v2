@@ -116,48 +116,132 @@ def name_key(name: str) -> str:
     return " ".join(p for p in text.split() if p not in _SUFFIXES)
 
 
+# "McCaffrey" is shortened to two letters, which is what makes CMC work where CM would not.
+_SCOTS = re.compile(r"^(ma?c)(?=[a-z])")
+
+
+def _part_initials(part: str) -> str:
+    prefix = _SCOTS.match(part)
+    if prefix and len(part) > len(prefix.group(1)):
+        return part[0] + part[len(prefix.group(1))]
+    return part[0]
+
+
+def _alias_key(text: str) -> str:
+    """How an abbreviation is looked up: letters only, no spaces. "J.S.N." -> "jsn"."""
+    return name_key(text).replace(" ", "")
+
+
+def _aliases(name: str) -> set[str]:
+    """The short forms a league actually types for a player.
+
+    Initialisms (JSN, ARSB), the bare surname, and the bare first name -- "Saquon" and
+    "Bijan" are how those two are always written. Every one of these is only ever accepted
+    when exactly one player on any roster answers to it, so "Allen", "Smith" and "Josh" rule
+    themselves out, and so does CMC: Chris McClellan collides with Christian McCaffrey.
+    Those fall back to what the model said, which for a famous nickname it reliably knows.
+    """
+    parts = name_key(name).split()
+    if not parts:
+        return set()
+    return {
+        "".join(p[0] for p in parts),
+        "".join(_part_initials(p) for p in parts),
+        parts[0],
+        parts[-1],
+    }
+
+
+@dataclass(frozen=True)
+class RosterPlayer:
+    name: str
+    team: str
+
+
 @dataclass(frozen=True)
 class RosterIndex:
     """Who is on which team right now, from ESPN rather than from model memory."""
 
-    teams_by_name: dict[str, tuple[str, ...]]
+    by_name: dict[str, tuple[RosterPlayer, ...]]
+    by_alias: dict[str, tuple[RosterPlayer, ...]]
+
+    def find(self, written: str) -> RosterPlayer | None:
+        """The one player this text names, or None if it names nobody or more than one.
+
+        Tried in order of how much it is trusting: the name as spelled, then a known short
+        form, then a close misspelling. Ambiguity always returns None -- two players sharing
+        a name is exactly where a guess does damage.
+        """
+        for table, key in (
+            (self.by_name, name_key(written)),
+            (self.by_alias, _alias_key(written)),
+        ):
+            if key and len(found := table.get(key, ())) == 1:
+                return found[0]
+
+        close = difflib.get_close_matches(name_key(written), self.by_name, n=2, cutoff=0.85)
+        if len(close) == 1 and len(self.by_name[close[0]]) == 1:
+            return self.by_name[close[0]][0]
+        return None
 
     def team_for(self, name: str) -> str | None:
         """This player's team, or None if unknown or shared with a namesake."""
-        teams = self.teams_by_name.get(name_key(name), ())
-        return teams[0] if len(teams) == 1 else None
+        player = self.find(name)
+        return player.team if player else None
 
 
 def roster_index(pairs: Iterable[tuple[str, str]]) -> RosterIndex:
-    teams: dict[str, list[str]] = {}
+    by_name: dict[str, list[RosterPlayer]] = {}
+    by_alias: dict[str, list[RosterPlayer]] = {}
     for name, team in pairs:
         key = name_key(name)
         if not key:
             continue
-        on = teams.setdefault(key, [])
-        if team not in on:
-            on.append(team)
-    return RosterIndex({key: tuple(on) for key, on in teams.items()})
+        player = RosterPlayer(name, team)
+        for table, keys in ((by_name, {key}), (by_alias, _aliases(name))):
+            for k in keys:
+                bucket = table.setdefault(k, [])
+                if player not in bucket:
+                    bucket.append(player)
+    return RosterIndex(
+        {k: tuple(v) for k, v in by_name.items()}, {k: tuple(v) for k, v in by_alias.items()}
+    )
 
 
 def names_a_player(parsed: dict | None) -> bool:
-    return bool(parsed) and parsed.get("market") in PLAYER_MARKETS and bool(parsed.get("subject"))
+    if not parsed or parsed.get("market") not in PLAYER_MARKETS:
+        return False
+    return bool(parsed.get("subject_as_written") or parsed.get("subject"))
 
 
-def with_real_team(parsed: dict | None, rosters: RosterIndex) -> dict | None:
-    """Correct a player leg's team from the roster, since the model is guessing at it.
+def ground(parsed: dict | None, rosters: RosterIndex) -> dict | None:
+    """Fill in which player a leg is on, and which team, from the roster.
 
-    Only an unambiguous roster hit overrides. Two players sharing a name is the one case
-    where the model's guess is the better tiebreak, and an unknown name is left alone
-    rather than blanked -- a typo should not cost a leg the team it did get right.
+    The model is asked only to copy the name as it was typed. Working out who that is, is a
+    lookup -- and one it provably gets wrong: on rookies drafted after its training data
+    ends, on abbreviations ("Jsn" read as ambiguous in week 3 having been read correctly as
+    "JSN" in week 2), and on whether a team it had been handed in the matchup list was
+    playing at all.
+
+    An unresolvable name is left exactly as the model left it. A typo should not cost a leg
+    the team the model did get right, and a namesake is better settled by a person.
     """
     if not names_a_player(parsed):
         return parsed
     assert parsed is not None
-    team = rosters.team_for(parsed["subject"])
-    if team is None or team == parsed.get("team"):
+    # The text as typed first, then the model's own reading of it. That second attempt is
+    # what rescues an abbreviation the roster finds ambiguous: "cmc" matches two players, but
+    # the "Christian McCaffrey" the model expanded it to matches one, and the team comes with
+    # it -- which is the whole point of the lookup.
+    written = parsed.get("subject_as_written")
+    player = (rosters.find(written) if written else None) or (
+        rosters.find(parsed["subject"]) if parsed.get("subject") else None
+    )
+    if player is None:
         return parsed
-    return {**parsed, "team": team}
+    if (player.name, player.team) == (parsed.get("subject"), parsed.get("team")):
+        return parsed
+    return {**parsed, "subject": player.name, "team": player.team}
 
 
 @dataclass(frozen=True)
