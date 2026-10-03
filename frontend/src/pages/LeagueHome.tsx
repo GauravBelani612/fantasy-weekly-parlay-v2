@@ -219,9 +219,25 @@ function offTheBoard(game: Game, round: Round): boolean {
   return false;
 }
 
-function TeamLine({ team, dim }: { team: Team | null; dim: boolean }) {
+function TeamLine({
+  team,
+  dim,
+  marker,
+}: {
+  team: Team | null;
+  dim: boolean;
+  /** Sits in a fixed column before the crest, so the crests still line up. */
+  marker?: string;
+}) {
   return (
     <div className="flex min-w-0 items-center gap-2">
+      <span
+        className={`w-4 shrink-0 text-right text-[10px] font-semibold ${
+          dim ? "text-slate-600" : "text-slate-500"
+        }`}
+      >
+        {marker}
+      </span>
       {team?.logo_url ? (
         <img
           src={team.logo_url}
@@ -258,8 +274,12 @@ function GameRow({ game, round }: { game: Game; round: Round }) {
       dim ? "border-edge bg-transparent" : "border-edge bg-input"
     }`}>
       <div className="min-w-0 flex-1 space-y-1.5">
+        {/* Away on top with the home side marked, so the pair reads the way it is said:
+            "Chicago Bears at Green Bay Packers". Order alone is the convention, but it is
+            not a signal -- and a neutral-site game has no home team to mark, which is why
+            it gets "vs" instead. */}
         <TeamLine team={game.away} dim={dim} />
-        <TeamLine team={game.home} dim={dim} />
+        <TeamLine team={game.home} dim={dim} marker={neutral ? "vs" : "at"} />
       </div>
       <div className="shrink-0 space-y-1 text-right">
         <p className={`text-xs tabular-nums ${dim ? "text-slate-600" : "text-slate-400"}`}>
