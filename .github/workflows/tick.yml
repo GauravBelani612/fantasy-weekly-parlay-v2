@@ -35,8 +35,17 @@ on:
     - cron: "*/15 11-18 * * 6"
     - cron: "*/10 11-18 * * 0"
 
-    # Baseline for everything else, including result recording over the weekend.
-    - cron: "*/20 * * * *"
+    # Baseline for everything else, including result recording over the weekend -- and,
+    # just as importantly, keeping the API awake. Render's free tier sleeps after about
+    # fifteen minutes idle and a measured cold start is 42 seconds, which the league sees
+    # as a dead loading screen. At */20 the service was guaranteed to nod off between
+    # runs; */10 stays inside the window. An extra run costs nothing: the notifications
+    # ledger makes a duplicate a no-op.
+    #
+    # The tradeoff is instance hours. A service that never sleeps bills close to a full
+    # month of them, so this sits near the free tier's ceiling -- the paid tier is the
+    # actual fix if that becomes a problem.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:

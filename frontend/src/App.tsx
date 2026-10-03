@@ -1,7 +1,7 @@
 import { Link, Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import { useLogout, useMe } from "./api/hooks";
-import { Spinner } from "./components/ui";
+import { WakingSpinner } from "./components/ui";
 import { HistoryPage } from "./pages/HistoryPage";
 import { LeagueHome } from "./pages/LeagueHome";
 import { LeaguesPage } from "./pages/LeaguesPage";
@@ -44,7 +44,8 @@ function Header() {
 function AppLayout() {
   const me = useMe();
 
-  if (me.isLoading) return <Spinner label="Loading..." />;
+  // The first request of the day pays the API's cold start, so this one says so.
+  if (me.isLoading) return <WakingSpinner />;
   if (!me.data) return <Login />;
 
   return (

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { Member, RoundStatus } from "../api/types";
@@ -98,4 +99,32 @@ export function ErrorNote({ error }: { error: unknown }) {
 
 export function Spinner({ label = "Loading..." }: { label?: string }) {
   return <p className="py-8 text-center text-sm text-slate-400">{label}</p>;
+}
+
+/** A spinner that explains itself once the wait gets long enough to need explaining.
+
+ *  The API sleeps on Render's free tier, and a cold start measures around forty seconds.
+ *  A bare "Loading..." for that long reads as broken rather than slow. The delay matters:
+ *  a warm load answers in under a second, and flashing this at everyone would be worse
+ *  than saying nothing.
+ */
+export function WakingSpinner({ after = 3000 }: { after?: number }) {
+  const [slow, setSlow] = useState(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setSlow(true), after);
+    return () => window.clearTimeout(id);
+  }, [after]);
+
+  return (
+    <div className="py-8 text-center">
+      <p className="text-sm text-slate-400">Loading&hellip;</p>
+      {slow && (
+        <p className="mx-auto mt-2 max-w-xs text-xs text-slate-600">
+          Waking the server up. This takes up to a minute when nobody has been on in a
+          while, and it is quick from then on.
+        </p>
+      )}
+    </div>
+  );
 }
