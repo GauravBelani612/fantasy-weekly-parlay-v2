@@ -140,6 +140,34 @@ class LegIn(BaseModel):
     raw_text: str = Field(min_length=2, max_length=500)
 
 
+class TeamOut(BaseModel):
+    abbreviation: str
+    name: str
+    logo_url: str | None = None
+
+
+class GameOut(BaseModel):
+    event_id: str
+    name: str
+    kickoff_at: datetime
+    final: bool = False
+    away: TeamOut | None = None
+    home: TeamOut | None = None
+
+
+class WeekScheduleOut(BaseModel):
+    """One NFL week's matchups, for showing the league what is on.
+
+    Deliberately carries no notion of which games are bettable: the round already sends the
+    window as two instants, and the browser compares kickoffs against them. That keeps this
+    the same answer for every league and lets it be fetched independently of the parlay.
+    """
+
+    season: str
+    week: int
+    games: list[GameOut] = []
+
+
 class RoundOut(BaseModel):
     id: uuid.UUID
     league_id: uuid.UUID

@@ -10,6 +10,7 @@ import type {
   Round,
   SleeperLeague,
   SleeperLink,
+  WeekSchedule,
 } from "./types";
 
 export const keys = {
@@ -18,6 +19,7 @@ export const keys = {
   league: (id: string) => ["league", id] as const,
   currentRound: (leagueId: string) => ["round", "current", leagueId] as const,
   rounds: (leagueId: string) => ["rounds", leagueId] as const,
+  schedule: (leagueId: string) => ["schedule", leagueId] as const,
   importable: (season?: string) => ["importable", season ?? "current"] as const,
   stats: (leagueId: string) => ["stats", leagueId] as const,
 };
@@ -117,6 +119,17 @@ export function useCurrentRound(leagueId: string | undefined) {
     // Legs are visible live, so keep the board reasonably fresh while people submit.
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
+  });
+}
+
+export function useWeekSchedule(leagueId: string | undefined) {
+  return useQuery({
+    queryKey: keys.schedule(leagueId!),
+    queryFn: () => api.get<WeekSchedule | null>(`/leagues/${leagueId}/schedule`),
+    enabled: Boolean(leagueId),
+    // The fixture list only changes when a game is flexed or a score goes final, so this
+    // can be far lazier than the board. Loaded separately so it never delays the parlay.
+    staleTime: 5 * 60_000,
   });
 }
 

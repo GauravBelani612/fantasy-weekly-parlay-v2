@@ -97,6 +97,28 @@ export interface Leg {
   kickoff_at: string | null;
 }
 
+export interface Team {
+  abbreviation: string;
+  name: string;
+  logo_url: string | null;
+}
+
+export interface Game {
+  event_id: string;
+  /** As ESPN writes it: "CHI @ GB", or "PHI VS JAX" for a neutral site. */
+  name: string;
+  kickoff_at: string;
+  final: boolean;
+  away: Team | null;
+  home: Team | null;
+}
+
+export interface WeekSchedule {
+  season: string;
+  week: number;
+  games: Game[];
+}
+
 /** Which kickoff the weekly deadline hangs off. */
 export type DeadlineMode = "first_kickoff" | "sunday";
 

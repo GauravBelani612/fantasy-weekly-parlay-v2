@@ -8,9 +8,16 @@ import {
   useRefreshRound,
   useSetLoser,
   useSubmitLeg,
+  useWeekSchedule,
 } from "../api/hooks";
-import type { LeagueDetail, Round } from "../api/types";
-import { Countdown, formatDeadline, formatKickoff } from "../components/Countdown";
+import type { Game, LeagueDetail, Round, Team } from "../api/types";
+import {
+  Countdown,
+  formatClock,
+  formatDay,
+  formatDeadline,
+  formatKickoff,
+} from "../components/Countdown";
 import { LegRow, OutcomePill } from "../components/Legs";
 import { Avatar, Button, ErrorNote, Panel, Spinner, StatusPill } from "../components/ui";
 
@@ -204,6 +211,117 @@ function LegForm({ round, leagueId }: { round: Round; leagueId: string }) {
   );
 }
 
+/** Whether a leg may ride on this game, given the window the round is running under. */
+function offTheBoard(game: Game, round: Round): boolean {
+  const kickoff = new Date(game.kickoff_at).getTime();
+  if (round.window_opens_at && kickoff < new Date(round.window_opens_at).getTime()) return true;
+  if (round.window_closes_at && kickoff >= new Date(round.window_closes_at).getTime()) return true;
+  return false;
+}
+
+function TeamLine({ team, dim }: { team: Team | null; dim: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {team?.logo_url ? (
+        <img
+          src={team.logo_url}
+          alt=""
+          width={20}
+          height={20}
+          loading="lazy"
+          className={`h-5 w-5 shrink-0 object-contain ${dim ? "opacity-50" : ""}`}
+        />
+      ) : (
+        <span className="h-5 w-5 shrink-0" />
+      )}
+      {/* Truncated rather than wrapped, so every row keeps the same height and the
+          kickoff times stay in a column. The title carries the full name on narrow
+          screens, where "Jacksonville Jaguars" does not fit. */}
+      <span
+        title={team?.name}
+        className={`truncate text-sm ${dim ? "text-slate-500" : "text-slate-200"}`}
+      >
+        {team?.name ?? "TBD"}
+      </span>
+    </div>
+  );
+}
+
+function GameRow({ game, round }: { game: Game; round: Round }) {
+  const dim = offTheBoard(game, round);
+  // ESPN writes a neutral-site game with "VS" rather than "@" -- worth passing on, since
+  // a London kickoff is the sort of thing you want to know before betting it.
+  const neutral = / VS /i.test(game.name);
+
+  return (
+    <li className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${
+      dim ? "border-edge bg-transparent" : "border-edge bg-input"
+    }`}>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <TeamLine team={game.away} dim={dim} />
+        <TeamLine team={game.home} dim={dim} />
+      </div>
+      <div className="shrink-0 space-y-1 text-right">
+        <p className={`text-xs tabular-nums ${dim ? "text-slate-600" : "text-slate-400"}`}>
+          {game.final ? "Final" : formatClock(game.kickoff_at)}
+        </p>
+        {dim && (
+          <p className="text-[11px] font-semibold text-amber-200/70">Off the board</p>
+        )}
+        {neutral && !dim && <p className="text-[11px] text-slate-600">Neutral site</p>}
+      </div>
+    </li>
+  );
+}
+
+function ScheduleBoard({ round, leagueId }: { round: Round; leagueId: string }) {
+  const schedule = useWeekSchedule(leagueId);
+
+  if (schedule.isLoading) return <Panel><Spinner label="Loading the schedule..." /></Panel>;
+  if (!schedule.data?.games.length) return null;
+
+  // Grouped by day in the reader's own timezone, which is also why it is grouped here
+  // rather than on the server: only the browser knows where the reader is.
+  const days: { heading: string; games: Game[] }[] = [];
+  for (const game of schedule.data.games) {
+    const heading = formatDay(game.kickoff_at);
+    const last = days.at(-1);
+    if (last?.heading === heading) last.games.push(game);
+    else days.push({ heading, games: [game] });
+  }
+
+  const anyOff = schedule.data.games.some((game) => offTheBoard(game, round));
+
+  return (
+    <Panel>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">Week {schedule.data.week} games</h2>
+        <span className="text-xs text-slate-600">{schedule.data.games.length} matchups</span>
+      </div>
+      {anyOff && (
+        <p className="mb-3 text-xs text-slate-500">
+          Games marked <span className="font-semibold text-amber-200/70">off the board</span>{" "}
+          fall outside this league&apos;s window, so legs on them aren&apos;t accepted.
+        </p>
+      )}
+      <div className="space-y-4">
+        {days.map((day) => (
+          <div key={day.heading}>
+            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              {day.heading}
+            </h3>
+            <ul className="space-y-1.5">
+              {day.games.map((game) => (
+                <GameRow key={game.event_id} game={game} round={round} />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function LegBoard({
   round,
   leagueId,
@@ -347,6 +465,7 @@ export function LeagueHome() {
             // The payer saw the real sportsbook lines; the commissioner settles disputes.
             canSettle={league.data.your_role === "commissioner" || Boolean(data.loser?.is_you)}
           />
+          <ScheduleBoard round={data} leagueId={leagueId!} />
         </>
       )}
     </div>

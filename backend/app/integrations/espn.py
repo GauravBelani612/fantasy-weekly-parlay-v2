@@ -66,16 +66,36 @@ RULED_OUT = frozenset(
 
 
 @dataclass(frozen=True)
+class TeamRef:
+    """A team as the scoreboard presents it, for showing the league who is playing."""
+
+    abbreviation: str
+    name: str
+    logo: str | None = None
+
+
+@dataclass(frozen=True)
 class NflEvent:
     event_id: str
     name: str
     kickoff_at: datetime
     status: str
     teams: tuple[str, ...] = ()
+    # Away first, matching how ESPN writes the short name: "TB @ DAL". Empty on an event
+    # whose competitors could not be read -- grading only ever needs `teams`.
+    competitors: tuple[TeamRef, ...] = ()
 
     @property
     def is_final(self) -> bool:
         return self.status == "STATUS_FINAL"
+
+    @property
+    def away(self) -> TeamRef | None:
+        return self.competitors[0] if len(self.competitors) == 2 else None
+
+    @property
+    def home(self) -> TeamRef | None:
+        return self.competitors[1] if len(self.competitors) == 2 else None
 
 
 @dataclass(frozen=True)
@@ -195,14 +215,26 @@ async def get_week_schedule(season: str, week: int) -> WeekSchedule:
     for raw in (data or {}).get("events", []):
         try:
             competitors = (raw.get("competitions") or [{}])[0].get("competitors") or []
+            # ESPN lists the home side first; everything that reads this wants away first,
+            # because that is the order the matchup is written and spoken in.
+            sides = sorted(
+                (c for c in competitors if c.get("team")),
+                key=lambda c: c.get("homeAway") != "away",
+            )
             events.append(
                 NflEvent(
                     event_id=str(raw["id"]),
                     name=raw.get("shortName") or raw.get("name") or "",
                     kickoff_at=_parse_dt(raw["date"]),
                     status=raw.get("status", {}).get("type", {}).get("name", "STATUS_SCHEDULED"),
-                    teams=tuple(
-                        c["team"]["abbreviation"] for c in competitors if c.get("team")
+                    teams=tuple(c["team"]["abbreviation"] for c in sides),
+                    competitors=tuple(
+                        TeamRef(
+                            abbreviation=c["team"]["abbreviation"],
+                            name=c["team"].get("displayName") or c["team"]["abbreviation"],
+                            logo=c["team"].get("logo"),
+                        )
+                        for c in sides
                     ),
                 )
             )

@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.auth.session import CurrentUser, DbSession
 from app.deps import LeagueCtx, RoundCtx
+from app.integrations import espn
 from app.models import LeagueMember
-from app.schemas import RoundOut, RoundResultIn, SetLoserIn
-from app.serializers import round_out
+from app.schemas import RoundOut, RoundResultIn, SetLoserIn, WeekScheduleOut
+from app.serializers import round_out, week_schedule_out
 from app.services import rounds as rounds_service
 
 router = APIRouter(tags=["rounds"])
@@ -21,6 +22,20 @@ async def get_current_round(ctx: LeagueCtx, user: CurrentUser, session: DbSessio
     if rnd is None:
         return None
     return await round_out(session, ctx.league, rnd, user)
+
+
+@router.get("/leagues/{league_id}/schedule", response_model=WeekScheduleOut | None)
+async def get_week_schedule(ctx: LeagueCtx, session: DbSession):
+    """Every matchup in the week the league is currently betting on.
+
+    Its own endpoint rather than a field on the round: it is secondary content at the foot
+    of the page, so it should not hold up the parlay, and unlike the round it is the same
+    answer for every league in the season.
+    """
+    rnd = await rounds_service.ensure_current_round(session, ctx.league)
+    if rnd is None:
+        return None
+    return week_schedule_out(await espn.get_week_schedule(rnd.season, rnd.bet_week))
 
 
 @router.get("/leagues/{league_id}/rounds", response_model=list[RoundOut])

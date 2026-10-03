@@ -5,9 +5,19 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations import espn
 from app.integrations.sleeper import avatar_url
 from app.models import League, LeagueMember, Leg, ParlayRound, User
-from app.schemas import LeagueDetailOut, LeagueOut, LegOut, MemberOut, RoundOut
+from app.schemas import (
+    GameOut,
+    LeagueDetailOut,
+    LeagueOut,
+    LegOut,
+    MemberOut,
+    RoundOut,
+    TeamOut,
+    WeekScheduleOut,
+)
 from app.services import grading
 from app.services import legs as legs_service
 from app.services.rounds import round_status
@@ -82,6 +92,32 @@ def league_detail_out(
             (member_out(m, uid) for m in members),
             key=lambda m: (not m.has_app_account, m.display_name.lower()),
         ),
+    )
+
+
+def team_out(team: espn.TeamRef | None) -> TeamOut | None:
+    return (
+        TeamOut(abbreviation=team.abbreviation, name=team.name, logo_url=team.logo)
+        if team
+        else None
+    )
+
+
+def week_schedule_out(schedule: espn.WeekSchedule) -> WeekScheduleOut:
+    return WeekScheduleOut(
+        season=schedule.season,
+        week=schedule.week,
+        games=[
+            GameOut(
+                event_id=event.event_id,
+                name=event.name,
+                kickoff_at=event.kickoff_at,
+                final=event.is_final,
+                away=team_out(event.away),
+                home=team_out(event.home),
+            )
+            for event in sorted(schedule.events, key=lambda e: e.kickoff_at)
+        ],
     )
 
 

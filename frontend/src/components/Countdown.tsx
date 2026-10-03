@@ -40,6 +40,20 @@ export function formatDeadline(iso: string): string {
   });
 }
 
+/** Just the time, for a kickoff already under a date heading: "1:00 PM". */
+export function formatClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+/** A day to group kickoffs under: "Sunday, Oct 11". */
+export function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /** Shorter, for a kickoff inside a sentence: "Sun 1:00 PM". The week is implied. */
 export function formatKickoff(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
