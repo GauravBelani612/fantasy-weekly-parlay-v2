@@ -166,6 +166,8 @@ class WeekScheduleOut(BaseModel):
     season: str
     week: int
     games: list[GameOut] = []
+    # Teams with no game this week. Empty outside the bye weeks, when all 32 play.
+    byes: list[TeamOut] = []
 
 
 class RoundOut(BaseModel):

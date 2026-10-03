@@ -117,6 +117,8 @@ export interface WeekSchedule {
   season: string;
   week: number;
   games: Game[];
+  /** Teams with no game this week. Empty outside the bye weeks. */
+  byes: Team[];
 }
 
 /** Which kickoff the weekly deadline hangs off. */

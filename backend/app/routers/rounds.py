@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.auth.session import CurrentUser, DbSession
@@ -35,7 +37,12 @@ async def get_week_schedule(ctx: LeagueCtx, session: DbSession):
     rnd = await rounds_service.ensure_current_round(session, ctx.league)
     if rnd is None:
         return None
-    return week_schedule_out(await espn.get_week_schedule(rnd.season, rnd.bet_week))
+    # Together: the second call only exists to name and badge the teams on bye, and there is
+    # no reason for it to wait on the first.
+    schedule, teams = await asyncio.gather(
+        espn.get_week_schedule(rnd.season, rnd.bet_week), espn.get_teams()
+    )
+    return week_schedule_out(schedule, teams)
 
 
 @router.get("/leagues/{league_id}/rounds", response_model=list[RoundOut])

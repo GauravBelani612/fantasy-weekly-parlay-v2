@@ -317,6 +317,32 @@ function ScheduleBoard({ round, leagueId }: { round: Round; leagueId: string }) 
             </ul>
           </div>
         ))}
+
+        {/* Last, because they are the one thing here that is not a game. Nobody can bet
+            them either, but for a different reason than a game being out of the window --
+            so they say "Bye" rather than borrowing that label. */}
+        {schedule.data.byes.length > 0 && (
+          <div>
+            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              On bye
+            </h3>
+            <ul className="space-y-1.5">
+              {schedule.data.byes.map((team) => (
+                <li
+                  key={team.abbreviation}
+                  className="flex items-center gap-3 rounded-lg border border-edge px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <TeamLine team={team} dim />
+                  </div>
+                  <p className="shrink-0 text-[11px] font-semibold tracking-wide text-slate-500">
+                    BYE
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </Panel>
   );

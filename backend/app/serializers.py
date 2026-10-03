@@ -103,10 +103,29 @@ def team_out(team: espn.TeamRef | None) -> TeamOut | None:
     )
 
 
-def week_schedule_out(schedule: espn.WeekSchedule) -> WeekScheduleOut:
+# More than this many teams without a game is not a bye week, it is a scoreboard that came
+# back short. Better to show no byes than to tell the league half the NFL is resting.
+_MOST_PLAUSIBLE_BYES = 8
+
+
+def byes_out(
+    schedule: espn.WeekSchedule, all_teams: dict[str, espn.TeamRef]
+) -> list[TeamOut]:
+    """Whoever is not playing, worked out by subtraction -- nothing reports a bye directly."""
+    playing = {abbr for event in schedule.events for abbr in event.teams}
+    resting = [team for abbr, team in sorted(all_teams.items()) if abbr not in playing]
+    if len(resting) > _MOST_PLAUSIBLE_BYES:
+        return []
+    return [out for team in resting if (out := team_out(team))]
+
+
+def week_schedule_out(
+    schedule: espn.WeekSchedule, all_teams: dict[str, espn.TeamRef] | None = None
+) -> WeekScheduleOut:
     return WeekScheduleOut(
         season=schedule.season,
         week=schedule.week,
+        byes=byes_out(schedule, all_teams or {}),
         games=[
             GameOut(
                 event_id=event.event_id,
