@@ -2,7 +2,11 @@ services:
   - type: web
     name: parlay-api
     runtime: python
-    plan: free
+    # Paid, so the service never spins down: on free it slept after 15 idle minutes and
+    # took ~40s to wake, which the league saw as a dead loading screen. Render applies this
+    # field on every push, so it has to match the dashboard -- leaving it at `free` would
+    # silently downgrade the service on the next commit.
+    plan: 0.5c-512mb
     # Keep this in the same region as the Neon project (us-west-2), or every query pays a
     # cross-country round trip. Stated explicitly rather than relying on the default: a
     # blueprint service cannot change region after creation, only be destroyed and
