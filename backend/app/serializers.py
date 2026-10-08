@@ -95,11 +95,22 @@ def league_detail_out(
     )
 
 
-def team_out(team: espn.TeamRef | None) -> TeamOut | None:
-    return (
-        TeamOut(abbreviation=team.abbreviation, name=team.name, logo_url=team.logo)
-        if team
-        else None
+def team_out(
+    team: espn.TeamRef | None, records: dict[str, str] | None = None
+) -> TeamOut | None:
+    """One team for the schedule. `records` fills in a record the caller does not carry.
+
+    A game's teams come off the scoreboard, which does not report a record, so theirs are
+    looked up from the standings the bye list already needs. One source for every row means
+    no two rows can disagree about the same team.
+    """
+    if team is None:
+        return None
+    return TeamOut(
+        abbreviation=team.abbreviation,
+        name=team.name,
+        logo_url=team.logo,
+        record=team.record or (records or {}).get(team.abbreviation),
     )
 
 
@@ -119,9 +130,14 @@ def byes_out(
     return [out for team in resting if (out := team_out(team))]
 
 
+def _records(all_teams: dict[str, espn.TeamRef]) -> dict[str, str]:
+    return {abbr: team.record for abbr, team in all_teams.items() if team.record}
+
+
 def week_schedule_out(
     schedule: espn.WeekSchedule, all_teams: dict[str, espn.TeamRef] | None = None
 ) -> WeekScheduleOut:
+    records = _records(all_teams or {})
     return WeekScheduleOut(
         season=schedule.season,
         week=schedule.week,
@@ -132,8 +148,8 @@ def week_schedule_out(
                 name=event.name,
                 kickoff_at=event.kickoff_at,
                 final=event.is_final,
-                away=team_out(event.away),
-                home=team_out(event.home),
+                away=team_out(event.away, records),
+                home=team_out(event.home, records),
             )
             for event in sorted(schedule.events, key=lambda e: e.kickoff_at)
         ],

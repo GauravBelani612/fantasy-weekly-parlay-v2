@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     sleeper_base_url: str = "https://api.sleeper.app/v1"
     espn_base_url: str = "https://site.api.espn.com/apis/site/v2/sports/football/nfl"
+    # Standings sit on a different base from the rest of the site API -- apis/v2, not
+    # apis/site/v2 -- so they get their own setting rather than a string substitution.
+    espn_standings_url: str = "https://site.api.espn.com/apis/v2/sports/football/nfl/standings"
     http_timeout_seconds: float = 15.0
 
     @property

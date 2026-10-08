@@ -72,6 +72,8 @@ class TeamRef:
     abbreviation: str
     name: str
     logo: str | None = None
+    # Wins-losses, or wins-losses-ties: "4-0", "3-1", "2-1-1". Only the standings carry it.
+    record: str | None = None
 
 
 @dataclass(frozen=True)
@@ -244,32 +246,37 @@ async def get_week_schedule(season: str, week: int) -> WeekSchedule:
     return WeekSchedule(season=season, week=week, events=events)
 
 
-async def get_teams() -> dict[str, TeamRef]:
-    """Every NFL team by abbreviation, for the ones the scoreboard does not mention.
+async def get_teams(season: str) -> dict[str, TeamRef]:
+    """Every NFL team by abbreviation, with its record, read from the standings.
 
-    A week's scoreboard only carries the teams playing in it, so a team on bye has no name
-    and no crest to show until they are looked up here. Returns what it can: an empty map
-    costs the bye list, not the schedule.
+    Two things need this. A week's scoreboard only carries the teams playing in it, so a
+    team on bye has no name or crest until it is looked up; and nothing else ESPN serves
+    here reports a record -- the plain team list has the field but leaves it null.
+
+    Returns what it can: an empty map costs the records and the bye list, not the schedule.
     """
     try:
-        data = await get_json(f"{settings.espn_base_url}/teams")
+        data = await get_json(settings.espn_standings_url, params={"season": season})
     except Exception:
-        log.warning("Could not fetch the team list; byes will not be shown", exc_info=True)
+        log.warning("Could not fetch the standings; no records or byes", exc_info=True)
         return {}
 
-    leagues = ((data or {}).get("sports") or [{}])[0].get("leagues") or [{}]
     teams: dict[str, TeamRef] = {}
-    for entry in leagues[0].get("teams") or []:
-        team = entry.get("team") or {}
-        abbr = team.get("abbreviation")
-        if not abbr:
-            continue
-        logos = team.get("logos") or [{}]
-        teams[abbr] = TeamRef(
-            abbreviation=abbr,
-            name=team.get("displayName") or abbr,
-            logo=logos[0].get("href"),
-        )
+    # Grouped by conference, which is of no interest here -- flatten and key by team.
+    for conference in (data or {}).get("children") or []:
+        for entry in (conference.get("standings") or {}).get("entries") or []:
+            team = entry.get("team") or {}
+            abbr = team.get("abbreviation")
+            if not abbr:
+                continue
+            stats = {s.get("name"): s.get("displayValue") for s in entry.get("stats") or []}
+            logos = team.get("logos") or [{}]
+            teams[abbr] = TeamRef(
+                abbreviation=abbr,
+                name=team.get("displayName") or abbr,
+                logo=logos[0].get("href"),
+                record=stats.get("overall"),
+            )
     return teams
 
 

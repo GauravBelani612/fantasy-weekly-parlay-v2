@@ -37,10 +37,10 @@ async def get_week_schedule(ctx: LeagueCtx, session: DbSession):
     rnd = await rounds_service.ensure_current_round(session, ctx.league)
     if rnd is None:
         return None
-    # Together: the second call only exists to name and badge the teams on bye, and there is
-    # no reason for it to wait on the first.
+    # Together: the second call carries the records and the teams on bye, and there is no
+    # reason for it to wait on the first.
     schedule, teams = await asyncio.gather(
-        espn.get_week_schedule(rnd.season, rnd.bet_week), espn.get_teams()
+        espn.get_week_schedule(rnd.season, rnd.bet_week), espn.get_teams(rnd.season)
     )
     return week_schedule_out(schedule, teams)
 

@@ -144,6 +144,8 @@ class TeamOut(BaseModel):
     abbreviation: str
     name: str
     logo_url: str | None = None
+    # "4-0", or "2-1-1" with a tie. Null when the standings could not be read.
+    record: str | None = None
 
 
 class GameOut(BaseModel):

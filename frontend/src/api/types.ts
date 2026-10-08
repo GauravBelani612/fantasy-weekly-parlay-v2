@@ -101,6 +101,8 @@ export interface Team {
   abbreviation: string;
   name: string;
   logo_url: string | null;
+  /** Wins-losses, or wins-losses-ties: "4-0", "2-1-1". Null if the standings were unread. */
+  record: string | null;
 }
 
 export interface Game {

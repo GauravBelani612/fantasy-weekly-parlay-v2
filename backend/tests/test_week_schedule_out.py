@@ -12,9 +12,16 @@ from app.serializers import week_schedule_out
 KICK = datetime(2026, 10, 11, 17, 0, tzinfo=UTC)
 LATER = datetime(2026, 10, 12, 0, 15, tzinfo=UTC)
 
+RECORDS = {
+    "PHI": "4-0", "KC": "3-1", "CIN": "2-2", "JAX": "1-3",
+    "DAL": "2-1-1", "NYG": "0-4", "SEA": "3-1", "ARI": "2-2",
+}
+
+# The standings are the only thing that reports a record, and they are also where the bye
+# teams' names and crests come from -- so one map carries all three.
 ALL_TEAMS = {
-    abbr: TeamRef(abbr, f"{abbr} Team", f"https://logos.example/{abbr.lower()}.png")
-    for abbr in ("PHI", "KC", "CIN", "JAX", "DAL", "NYG", "SEA", "ARI")
+    abbr: TeamRef(abbr, f"{abbr} Team", f"https://logos.example/{abbr.lower()}.png", record)
+    for abbr, record in RECORDS.items()
 }
 
 
@@ -25,7 +32,11 @@ def game(event_id: str, away: str, home: str, kickoff: datetime = KICK) -> NflEv
         kickoff_at=kickoff,
         status="STATUS_SCHEDULED",
         teams=(away, home),
-        competitors=(ALL_TEAMS[away], ALL_TEAMS[home]),
+        # Built the way the scoreboard builds them: name and crest, but no record.
+        competitors=(
+            TeamRef(away, f"{away} Team", f"https://logos.example/{away.lower()}.png"),
+            TeamRef(home, f"{home} Team", f"https://logos.example/{home.lower()}.png"),
+        ),
     )
 
 
@@ -93,3 +104,32 @@ def test_no_team_list_means_no_byes_rather_than_no_schedule():
     out = week_schedule_out(FOUR_GAMES)
     assert out.byes == []
     assert len(out.games) == 4
+
+
+# ------------------------------------------------------------------ the records
+
+
+def test_a_games_teams_pick_up_their_records_from_the_standings():
+    """The scoreboard does not carry a record, so it is looked up for every row alike."""
+    out = week_schedule_out(FOUR_GAMES, ALL_TEAMS)
+    shown = {g.away.abbreviation: g.away.record for g in out.games}
+    assert shown["PHI"] == "4-0"
+    assert shown["DAL"] == "2-1-1", "a tie is three parts, not two"
+
+
+def test_a_bye_team_carries_its_own_record():
+    out = week_schedule_out(week(game("1", "PHI", "KC")), ALL_TEAMS)
+    assert {t.abbreviation: t.record for t in out.byes}["NYG"] == "0-4"
+
+
+def test_a_team_the_standings_never_mentioned_has_no_record():
+    """Null, not a guess and not an empty string the UI would render as "()"."""
+    out = week_schedule_out(FOUR_GAMES, {})
+    assert all(g.away.record is None and g.home.record is None for g in out.games)
+
+
+def test_losing_the_standings_costs_the_records_but_not_the_games():
+    out = week_schedule_out(FOUR_GAMES)
+    assert len(out.games) == 4
+    assert out.games[0].away.name == "PHI Team"
+    assert out.games[0].away.record is None

@@ -252,6 +252,17 @@ function TeamLine({
       >
         {team?.name ?? "TBD"}
       </span>
+      {/* Bracketed so it reads as an aside rather than as part of the name, which also
+          keeps the @ that follows it legible. */}
+      {team?.record && (
+        <span
+          className={`shrink-0 text-xs tabular-nums ${
+            dim ? "text-slate-600" : "text-slate-500"
+          }`}
+        >
+          ({team.record})
+        </span>
+      )}
       {marker && (
         <span
           className={`shrink-0 text-xs font-semibold ${
